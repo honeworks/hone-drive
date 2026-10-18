@@ -55,6 +55,7 @@ def test_view_without_measurements_or_external_drive() -> None:
     run = scan(probe=reference_probe(), finders={})
     run.drives = run.drives[:1]
     run.volumes = run.volumes[:1]
+    run.volumes[0].system = True  # the reference machine is Linux; on Windows its "/" is not this OS's root
     view = run_view(run, "/home/user")
     assert view["drives"][0]["speed"] is None and view["drives"][0]["test_folder"] == "~"
     assert view["models"]["rows"] == [] and view["biggest"] == []

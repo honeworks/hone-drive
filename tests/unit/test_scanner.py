@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -39,12 +40,14 @@ def test_scan_places_stores_and_marks_the_system_volume(home: Path) -> None:
     assert ctx.extra == ["/somewhere"]
     assert run.machine.hostname == "reference" and len(run.drives) == 2
     assert run.stores[0].volume == ext and run.stores[0].items[0].volume == ext
-    assert run.volume("/") and run.volume("/").system  # type: ignore[union-attr]
+    if sys.platform != "win32":  # the reference machine's "/" is this OS's root only on POSIX
+        assert run.volume("/") and run.volume("/").system  # type: ignore[union-attr]
     assert not run.volume(ext).system  # type: ignore[union-attr]
     assert run.drive("sda") and run.drive(None) is None
     assert messages[:2] == ["machine and drives", "store x"]
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Linux paths of the reference machine")
 def test_accounting_subtracts_server_sized_stores(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     probe = reference_probe(external_mount=str(home))
     ctx = Context(os_name="linux", home=str(home), env={}, run=FakeRunner(), fetch=no_fetch)

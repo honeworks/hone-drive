@@ -42,7 +42,15 @@ SKIP_FILESYSTEMS = {
     "fuse.gvfsd-fuse",
     "",
 }
-SKIP_MOUNT_PREFIXES = ("/snap/", "/var/lib/docker/", "/var/snap/", "/System/Volumes/", "/private/var/vm")
+SKIP_MOUNT_PREFIXES = (
+    "/snap/",
+    "/var/lib/docker/",
+    "/var/snap/",
+    "/System/Volumes/",
+    "/System/Library/",
+    "/private/var/vm",
+    "/Library/Developer/CoreSimulator/",
+)
 
 
 def psutil_partitions() -> list[Partition]:

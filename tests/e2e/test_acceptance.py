@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -34,7 +35,7 @@ def test_ac1_volumes_match_the_os_figures() -> None:
         volume = run.volume(part.mountpoint)
         if volume is None:
             continue
-        usage = psutil.disk_usage(part.mountpoint)
+        usage = shutil.disk_usage(part.mountpoint)  # statvfs / GetDiskFreeSpaceEx, as df and Explorer show it
         assert abs(volume.total_bytes - usage.total) <= usage.total * 0.01
         assert abs(volume.used_bytes - usage.used) <= usage.total * 0.01
         assert abs(volume.free_bytes - usage.free) <= usage.total * 0.01

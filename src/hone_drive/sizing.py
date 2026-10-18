@@ -114,7 +114,7 @@ def _count(
         tally.unreadable.append(entry.path)
         return
     if stat.S_ISDIR(info.st_mode):
-        if device is None or info.st_dev == device:
+        if device is None or info.st_dev in (device, 0):  # Windows' scandir leaves st_dev at 0
             stack.append(entry.path)
         return
     if not stat.S_ISREG(info.st_mode):

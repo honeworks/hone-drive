@@ -97,7 +97,7 @@ def test_scan_through_the_api_with_events(server: Server) -> None:
     reader.start()
     time.sleep(0.3)
     status, body, _ = request(server, "POST", "/api/scan", {}, {TOKEN_HEADER: server.token})
-    assert status == 202 and json.loads(body)["running"] is True
+    assert status == 202 and json.loads(body)["kind"] == "scan"  # it may already be done
     wait_for_runs(1)
     reader.join(5)
     assert any(b"event: progress" in e for e in events) and any(b"event: done" in e for e in events)
