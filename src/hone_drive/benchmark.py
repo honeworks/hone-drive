@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 from hone_drive import bench_safety as safety
@@ -72,6 +73,15 @@ def bench(
             run.measurements += _bench_volume(run, folder, mount, tests, options)
             if options.stop.is_set():
                 break
+    return run
+
+
+def carry_over(run: Run, previous: Run) -> Run:
+    """Keep an earlier run's measurements of volumes this run still has, so a new scan doesn't forget how
+    fast a drive was (a later benchmark of that volume replaces them)."""
+    if previous.machine.hostname == run.machine.hostname:
+        kept = [m for m in previous.measurements if run.volume(m.volume) is not None]
+        run.measurements = kept + [m for m in run.measurements if m.id not in {k.id for k in kept}]
     return run
 
 
@@ -154,6 +164,7 @@ def _measure(
     test: TestName, mount: str, total: int, seconds: float, cache: CacheBypass, rates: list[float]
 ) -> Measurement:
     gbs = total / seconds / 1e9 if seconds > 0 else 0.0
+    measured = datetime.now(UTC).isoformat(timespec="seconds")
     spread = (
         statistics.pstdev(rates) / statistics.fmean(rates)
         if len(rates) > 1 and statistics.fmean(rates)
@@ -168,6 +179,7 @@ def _measure(
         gbs=round(gbs, 4),
         cache=cache,
         spread=round(spread, 3) if spread is not None else None,
+        measured=measured,
     )
 
 

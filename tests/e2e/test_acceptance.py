@@ -236,3 +236,76 @@ def test_ac10_load_times_use_the_measured_read_and_say_disk_time_only() -> None:
     measured = hd.load_time(item, "/", run)
     assert measured is not None and measured.basis == "measured seq-read" and measured.cites == ["seq-read@/"]
     assert round(measured.seconds) == 9
+
+
+# -- advice, reports, the dashboard and history (milestone M3) --------------------------------------------
+
+
+def test_ac11_advice_never_runs_a_command_and_always_explains(monkeypatch: pytest.MonkeyPatch) -> None:
+    from tests.unit.test_advice import reference_run
+
+    ran: list[object] = []
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: ran.append(a))
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: ran.append(a))
+    run = reference_run()
+    advice = hd.advise(run, "/home/user")
+    assert advice and ran == []
+    for item in advice:
+        assert item.rule and item.why and item.cites
+        assert set(item.commands) <= {run.machine.os}
+
+
+def test_ac13_a_report_removes_private_details() -> None:
+    from tests.unit.test_advice import reference_run
+
+    run = reference_run()
+    run.machine.hostname = "workstation-7"
+    run.drives[1].serial = "PNY1234567"
+    run.volumes[1].uuid = "6A1F-0C2D"
+    run.stores[1].path = "/home/alice/ComfyUI/models"
+    text = hd.report(run, "md", home="/home/alice") + hd.report(run, "json", home="/home/alice")
+    for private in ("workstation-7", "PNY1234567", "6A1F-0C2D", "alice"):
+        assert private not in text
+    assert "PNY1234567" in hd.report(run, "json", keep_private=True, home="/home/alice")
+
+
+def test_ac14_the_dashboard_is_local_and_guarded(data_home: Path) -> None:
+    import http.client
+
+    from hone_drive.dashboard import start, stop
+
+    server = start(0)
+    try:
+        assert server.server_address[0] == "127.0.0.1"
+        port = server.server_address[1]
+
+        def call(method: str, headers: dict[str, str]) -> int:
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            conn.request(
+                method,
+                "/api/runs" if method == "GET" else "/api/stop",
+                body=b"{}" if method == "POST" else None,
+                headers=headers,
+            )
+            status = conn.getresponse().status
+            conn.close()
+            return status
+
+        assert call("GET", {"Host": f"127.0.0.1:{port}"}) == 200
+        assert call("GET", {"Host": "rebind.example"}) == 403
+        assert call("POST", {"Host": f"127.0.0.1:{port}", "Content-Type": "application/json"}) == 403
+    finally:
+        stop(server)
+
+
+def test_ac15_compare_reports_a_renegotiated_link_and_a_real_speed_change() -> None:
+    from tests.unit.test_advice import reference_run
+
+    before, after = reference_run(), reference_run()
+    after.drives[1].link.negotiated_gbps, after.drives[1].link.negotiated_lanes = 20.0, 2
+    after.measurements[2] = after.measurements[2].model_copy(update={"gbs": 1.9})
+    after.measurements[0] = after.measurements[0].model_copy(update={"gbs": 2.25})  # within ±5%: noise
+    kinds = {(c.kind, c.subject) for c in hd.compare(before, after)}
+    assert ("link", "PNY RP60 PSSD") in kinds
+    assert ("speed", "seq-read@/run/media/user/PNYRP60PSSD") in kinds
+    assert ("speed", "seq-read@/") not in kinds

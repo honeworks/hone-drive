@@ -128,6 +128,7 @@ class WindowsProbe:
             info = labels.get(letter, {})
             volume.label = cast(str | None, info.get("FileSystemLabel")) or None
             volume.uuid = cast(str | None, info.get("UniqueId"))
+            volume.unknown["at_boot"] = "Windows mounts drives by letter when they are connected"
             if volume.drive_id is None:
                 volume.unknown["drive_id"] = "Get-Partition did not list this drive letter"
         return volumes

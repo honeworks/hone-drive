@@ -154,6 +154,7 @@ class MacProbe:
             volume.drive_id = re.sub(r"s\d+$", "", parent) or None
             volume.label = cast(str | None, info.get("VolumeName"))
             volume.uuid = cast(str | None, info.get("VolumeUUID"))
+            volume.unknown["at_boot"] = "macOS mounts external volumes when a user logs in"
             if volume.drive_id is None:
                 volume.unknown["drive_id"] = "diskutil did not name the disk below this volume"
         return volumes

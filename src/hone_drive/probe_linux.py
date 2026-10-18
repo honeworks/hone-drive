@@ -166,10 +166,13 @@ class LinuxProbe:
         volumes = list_volumes("linux", self.partitions, self.usage)
         labels = self._by("/dev/disk/by-label")
         uuids = self._by("/dev/disk/by-uuid")
+        fstab = _fstab(self.files.read("/etc/fstab") or "")
         for volume in volumes:
             real = self.files.realpath(volume.device)
             volume.drive_id = self._disk_of(real.rsplit("/", 1)[-1])
             volume.label, volume.uuid = labels.get(real), uuids.get(real)
+            keys = {volume.mount, volume.device, real, f"UUID={volume.uuid}", f"LABEL={volume.label}"}
+            volume.at_boot = bool(keys & fstab) or volume.mount in ("/", "/boot", "/efi", "/home")
             if volume.drive_id is None:
                 volume.unknown["drive_id"] = "not backed by a local block device"
         return volumes
@@ -188,6 +191,16 @@ class LinuxProbe:
         if slaves:
             return self._disk_of(slaves[0], depth + 1)  # LUKS, LVM: follow to the partition below
         return name if self.files.realpath(f"/sys/block/{name}") != f"/sys/block/{name}" else None
+
+
+def _fstab(text: str) -> set[str]:
+    """The devices and mount points `/etc/fstab` mounts at boot (entries with `noauto` excluded)."""
+    found: set[str] = set()
+    for line in text.splitlines():
+        fields = line.split("#", 1)[0].split()
+        if len(fields) >= 4 and "noauto" not in fields[3].split(","):
+            found |= {fields[0], fields[1]}
+    return found
 
 
 def _usb_dir(path: str) -> str | None:

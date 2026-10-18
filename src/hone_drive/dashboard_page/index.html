@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="hone-token" content="{{TOKEN}}">
+<title>hone-drive</title>
+<link rel="stylesheet" href="/app.css">
+<script type="module" src="/app.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo" aria-hidden="true"></span>hone-drive</div>
+  <nav class="tabs" role="tablist" aria-label="Screens">
+    <button role="tab" data-screen="overview" aria-selected="true">Overview</button>
+    <button role="tab" data-screen="drives">Drives</button>
+    <button role="tab" data-screen="bench">Benchmark</button>
+    <button role="tab" data-screen="models">Models</button>
+    <button role="tab" data-screen="advice">Advice</button>
+    <button role="tab" data-screen="history">History</button>
+  </nav>
+  <div class="job" id="job" aria-live="polite"></div>
+</header>
+<main id="main">
+  <section class="empty" id="empty" hidden>
+    <h1>No scan yet</h1>
+    <p>hone-drive looks at your drives, the model stores and caches on them, and how they are connected.
+      Nothing is changed, moved or deleted.</p>
+    <button class="primary" data-action="scan">Scan this machine</button>
+  </section>
+  <section id="screen-overview" class="screen"></section>
+  <section id="screen-drives" class="screen" hidden></section>
+  <section id="screen-bench" class="screen" hidden></section>
+  <section id="screen-models" class="screen" hidden></section>
+  <section id="screen-advice" class="screen" hidden></section>
+  <section id="screen-history" class="screen" hidden></section>
+</main>
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>

@@ -60,11 +60,6 @@ def test_errors_are_one_line(capsys: pytest.CaptureFixture[str], data_home: Path
     assert capsys.readouterr().err.startswith("hone-drive: no run 'nope'")
 
 
-def test_no_command_scans(fake_scan: None, capsys: pytest.CaptureFixture[str]) -> None:
-    assert cli.main([]) == 0
-    assert "saved as run" in capsys.readouterr().out
-
-
 def test_bench_command_on_a_stored_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     from tests.unit.test_benchmark import local_run
 
@@ -85,3 +80,41 @@ def test_parse_size() -> None:
     assert cli.parse_size("512MiB") == 512 * 1024**2
     assert cli.parse_size("1.5g") == int(1.5 * 1024**3)
     assert cli.parse_size("4096") == 4096
+
+
+def test_advise_compare_report_and_dashboard(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from hone_drive.runs import save_run
+    from tests.unit.test_advice import reference_run
+
+    a, b = reference_run(), reference_run()
+    a.id, b.id = "20261018T000000Z-aaaaaa", "20261018T010000Z-bbbbbb"
+    b.volumes[0].used_bytes -= 10**11
+    save_run(a)
+    save_run(b)
+    assert cli.main(["advise", a.id]) == 0
+    out = capsys.readouterr().out
+    assert "[A01 warn] / is 89% full" in out and "    $ sudo systemctl stop ollama" in out and "    ! " in out
+    assert cli.main(["advise", "--json"]) == 0 and capsys.readouterr().out.startswith('[{"unknown"')
+    assert cli.main(["compare", a.id]) == 0 and "volume  /:" in capsys.readouterr().out
+    assert cli.main(["compare", a.id, a.id]) == 0 and "No changes" in capsys.readouterr().out
+    assert cli.main(["report"]) == 0 and "# hone-drive report" in capsys.readouterr().out
+    served: list[tuple[int, bool]] = []
+    monkeypatch.setattr(
+        "hone_drive.dashboard.serve", lambda port, open_browser: served.append((port, open_browser))
+    )
+    assert cli.main(["dashboard", "--port", "8800", "--no-browser"]) == 0
+    assert cli.main([]) == 0
+    assert served == [(8800, False), (0, True)]
+
+
+def test_advise_with_nothing_to_say(capsys: pytest.CaptureFixture[str]) -> None:
+    from hone_drive.runs import save_run
+
+    run = real_scan(probe=reference_probe(), finders={})
+    run.volumes[0].used_bytes = run.volumes[0].total_bytes // 2
+    run.drives[1].link.limited = False
+    save_run(run)
+    assert cli.main(["advise"]) == 0
+    assert "No advice" in capsys.readouterr().out

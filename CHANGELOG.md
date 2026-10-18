@@ -8,6 +8,12 @@ design changed is in [`design/changes/`](design/changes/).
 
 ### Added
 
+- Milestone M3 of [0001](design/changes/0001-initial-design.md), advice and the dashboard: the ten
+  advice rules with per-OS commands that hone-drive never runs (D-018); run comparison; reports with
+  private details removed; the local dashboard (Overview, Drives, Benchmark, Models, Advice, History)
+  with live benchmark progress, guarded against DNS rebinding and cross-site requests (D-016);
+  measurements kept across scans (D-015); `hone-drive advise`, `compare`, `report`, `dashboard` (the
+  default command). No SMART health yet (D-017).
 - Milestone M2 of [0001](design/changes/0001-initial-design.md), the benchmarks: sequential write and
   read, sustained write with a per-second curve, random reads (latency and 32 in flight) and reads of
   real model files, with the page cache bypassed on Linux, macOS and Windows and the method recorded

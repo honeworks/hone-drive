@@ -37,6 +37,9 @@ src/hone_drive/
   scanner.py             scan(): one look at the machine
   benchmark.py  bench_safety.py  directio.py  estimates.py   benchmarks, their safety rules, direct I/O
                          per OS (the only OS-specific code outside the probes), load and copy times
+  advice.py  advice_stores.py  commands.py   the ten advice rules and the per-OS commands they show
+  compare.py  report.py  views.py            run comparison, reports to share, what the dashboard shows
+  dashboard.py  jobs.py  dashboard_page/     the local server, its one background job, the static page
   runs.py                runs on disk;  text.py: sizes and speeds for people;  cli.py: the command line
   testing.py             FakeProbe, recorded machines, record(), check_probe()
 tests/unit|contract|integration|e2e   tests/fixtures/<os>/<machine>.json: recorded or hand-written machines

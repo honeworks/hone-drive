@@ -87,6 +87,7 @@ class Volume(Facts):
     free_bytes: int  # available to an ordinary user, as `df` and the file managers show it
     read_only: bool = False
     system: bool = False  # holds the OS or the home folder
+    at_boot: bool | None = None  # mounted at boot, before services start (advice A06)
     traits: Traits | None = None
 
     @property
@@ -165,6 +166,7 @@ class Measurement(Facts):
     label: str | None = None  # "link-bound", "drive-bound", "cache exhausted after 21 GB", ...
     partial: bool = False
     warnings: list[str] = Field(default_factory=list[str])
+    measured: str | None = None  # ISO-8601 UTC; older than the run when carried over from an earlier run
 
 
 class Gain(Facts):
