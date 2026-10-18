@@ -29,8 +29,11 @@ workflows.
    private details removed.
 
 ```bash
-uvx hone-drive            # opens the dashboard (planned)
-uvx hone-drive scan --json
+uvx hone-drive                      # opens the dashboard in your browser
+uvx hone-drive scan                 # drives, links, volumes and model stores, as text
+uvx hone-drive bench --tests seq,model   # measure the home drive and every external drive
+uvx hone-drive advise               # what to move or clean, with the commands for your system
+uvx hone-drive report > report.md   # a report to share, private details removed
 ```
 
 ## How this is being built

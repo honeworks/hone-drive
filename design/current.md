@@ -270,7 +270,7 @@ zero or more `Advice` items. 0.1 has:
 | A02 | a store over 20 GB is on a fuller or slower-to-write volume than an available external one | move it, with the store's own setting (`OLLAMA_MODELS`, `HF_HOME`, ComfyUI `extra_model_paths.yaml`, LM Studio's folder) and the change in load time per item |
 | A03 | a link is limited (§4.1) | the gap, the likely causes in order, what to try; "test again" re-runs the probe |
 | A04 | an internal SSD over 85% full measured writes far below its link (§4.4) | the slowdown is likely the fill level; freeing space should restore it |
-| A05 | a store's volume lacks a trait it needs (§4.3) | e.g. Ollama's service user can't own files on exFAT: reformat as the OS's native filesystem (with the warning that this erases it) or run the server as your user |
+| A05 | a volume that holds a store, or that A02 would move one to, lacks a trait it needs (§4.3) | e.g. Ollama's service user can't own files on exFAT: reformat as the OS's native filesystem (with the warning that this erases it) or run the server as your user |
 | A06 | an external volume holds a store a service reads at boot, and the volume is not mounted at boot | how to mount it at boot for this OS (an `/etc/fstab` line with `nofail`, a launchd note, a fixed drive letter) |
 | A07 | a cache is large and safe to clean (uv, pip, npm, Docker build cache, package manager caches) | the clean command and the bytes it frees; for caches that need the same volume as projects (uv, pnpm), "clean, don't move" |
 | A08 | byte-identical duplicates exist (§5.3) | which copy to keep and how to point the other tool at it |
@@ -291,7 +291,11 @@ volumes, stores, measurements, advice, and the probe commands with their exit co
 the data folder (`HONE_DRIVE_HOME`, default: `~/.local/share/hone-drive` on Linux, `~/Library/Application
 Support/hone-drive` on macOS, `%LOCALAPPDATA%\hone-drive` on Windows), one file per run, written
 atomically. `compare(a, b)` lists what changed: drives added or removed, links renegotiated, volumes
-fuller or emptier, throughput up or down beyond the measurements' spread.
+fuller or emptier, throughput up or down beyond the measurements' spread (at least ±10%).
+
+A new scan keeps the latest run's measurements of the volumes it still finds, each with the time it was
+measured, so the load times don't fall back to link speeds after every scan; a new benchmark of a volume
+replaces them (decision D-015).
 
 ## 10. The dashboard
 
@@ -303,31 +307,41 @@ build step, no CDN, no network.
 | Screen | Shows |
 |---|---|
 | Overview | each volume as a bar (stores stacked, unaccounted space hatched), the top advice, the last run's time |
-| Drives | each drive with its link diagram (port, cable, drive: negotiated against possible), filesystem traits, fill level, SMART summary when available |
+| Drives | each drive with its link diagram (port, cable, drive: negotiated against possible), its volumes with filesystem traits, fill level and whether they mount at boot, and the facts the OS could not tell |
 | Benchmark | pick volumes and tests, live throughput chart, results side by side with link-bound/drive-bound labels |
 | Models | every item across stores: size, store, volume, estimated load time from each measured volume, duplicates |
 | Advice | the ranked advice with why, gain, risks and commands to copy |
 | History | past runs and a comparison of any two |
 
-Charts are inline SVG drawn by the page. The server refuses requests whose `Host` is not a local name
-(DNS rebinding) and state-changing requests without the page's token header (CSRF), as Hone Frame does.
+Charts are inline SVG and HTML drawn by the page, in the dataviz reference palette for light and dark
+(decision D-016); every chart has a legend or a table. Store colours follow the store, never its size.
+The server refuses requests whose `Host` is not a local name (DNS rebinding), and changes (`POST`) without
+the page's token in the `X-Hone-Drive-Token` header, with a foreign `Origin`, or with a body that isn't
+JSON (CSRF). The page's content security policy allows only its own scripts and styles. A scan or a
+benchmark runs as one background job at a time; `/api/events` streams its progress and each benchmark
+chunk's throughput. Screens have their own address (`#drives`); `?still` turns off live updates, for
+screenshots.
 
 ## 11. The command line
 
-`hone-drive [dashboard] [--port N] [--no-browser]`, `scan [--add PATH] [--duplicates] [--json]`,
-`bench [VOLUME ...] [--tests seq,random,sustained,model] [--size 4G] [--json]`, `advise [--json]`,
-`runs`, `compare RUN_A RUN_B`, `report [RUN] [--format md|json] [--keep-private]`. Commands print a short
-human summary, or the run's JSON with `--json`. The CLI uses `argparse` (decision D-002).
+`hone-drive [dashboard] [--port N] [--no-browser]`, `scan [--add PATH] [--account] [--duplicates]
+[--json]`, `bench [PATH ...] [--tests seq,random,sustained,model] [--size 4G] [--model FILE] [--run ID]
+[--json]`, `advise [RUN] [--json]`, `runs`, `show [RUN] [--json]`, `compare RUN_A [RUN_B]`, `report [RUN]
+[--format md|json] [--keep-private]`. `RUN` defaults to `latest`. Commands print a short human summary,
+or JSON with `--json`; `scan` and `bench` save the run with its advice. The CLI uses `argparse` (decision
+D-002); `python -m hone_drive` is the same command.
 
 ## 12. Python API
 
 ```python
-from hone_drive import scan, bench, advise, compare, load_run, report
+from pathlib import Path
+from hone_drive import BenchOptions, advise, bench, load_time, report, scan
 
-run = scan(accounting=False, duplicates=False)  # Machine, drives, volumes, stores; no benchmarks
-run = bench(run, volumes=["/", "/mnt/ext"], tests=["seq", "model"])
-for a in advise(run):
-    print(a.severity, a.title, a.gain)
+run = scan(accounting=False, duplicates=False)          # machine, drives, volumes, stores; no benchmarks
+run = bench(run, [str(Path.home()), "/mnt/models"], ["seq", "model"], BenchOptions(size=4 * 1024**3))
+for a in advise(run, str(Path.home())):
+    print(a.severity, a.title, a.gain.bytes_freed)
+print(report(run, "md"))                                 # private details removed
 ```
 
 The public names are exported from `hone_drive/__init__.py` with `__all__`. `hone_drive.testing` provides
@@ -395,5 +409,7 @@ everything; they never leave the machine unless the user shares a report.
   from its model's published figure only if the user enters it.
 - Random-read tests from Python measure latency well at one request in flight; at 32 in flight they are
   approximate (threads, not an async I/O engine). A later change may add `fio` as an optional engine.
+- SMART health is not read in 0.1 (`smartctl` usually needs administrator rights); the Drives screen
+  shows no health summary (decision D-017).
 - APFS snapshots, Btrfs/ZFS compression and deduplication can make "used" differ from the sum of files;
   0.1 names these as possible causes of unaccounted space without measuring them.

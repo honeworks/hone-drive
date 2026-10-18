@@ -130,3 +130,40 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
 - **Why:** design §6.3 rule 1 for a process that is killed (`finally` blocks don't run): the next start
   must find the file without searching every drive.
 - **Status:** follows the design (0001).
+
+## D-015: a new scan keeps the latest run's measurements  (2026-10-18)
+
+- **Choice:** `scan` (CLI and dashboard) copies the latest run's measurements of the volumes it still
+  finds, when the host is the same; each measurement carries the time it was measured. A benchmark of a
+  volume replaces that volume's measurements.
+- **Why:** a benchmark takes minutes and the speeds rarely change; without this, every scan would make
+  the load times fall back to link estimates. The time stamp keeps it honest.
+- **Status:** follows the design (0001).
+
+## D-016: dashboard colours are the dataviz reference palette  (2026-10-18)
+
+- **Choice:** stores take the eight categorical slots in a fixed order (Ollama, ComfyUI, Hugging Face,
+  Docker, LM Studio, llama.cpp, caches, custom folders), so a store keeps its colour on every screen;
+  "other files" is neutral grey and unaccounted space is a hatched grey. Benchmarked volumes take the
+  first three slots. Light and dark steps are the reference palette's validated values; status colours
+  (warning, suggestion, note) always come with a word.
+- **Why:** the palette is validated for colour-vision deficiency on adjacent pairs, which is what a
+  stacked bar in a fixed order needs.
+- **Status:** follows the design (0001).
+
+## D-017: no SMART health in 0.1  (2026-10-18)
+
+- **Question:** design §3.2 lists SMART health as optional and §10 a "SMART summary when available".
+- **Choice:** not built in 0.1. `smartctl` needs administrator rights on most systems and isn't
+  installed by default, so it would be "unknown" almost everywhere; design §16 says so.
+- **Why:** AGENTS.md rule 3 (no administrator rights). A later change can read it when the user has set
+  up `smartctl` to run without a password.
+- **Status:** a deviation from the accepted design, noted here for the owner.
+
+## D-018: A05 speaks only about volumes that matter  (2026-10-18)
+
+- **Choice:** the filesystem advice (A05) is given for an external volume only when it holds a store or
+  advice A02 would move one there, and it is a warning when a store that runs as its own user (Ollama on
+  Linux, Docker) would move there.
+- **Why:** an exFAT stick for moving files between computers needs no advice.
+- **Status:** follows the design (0001).
