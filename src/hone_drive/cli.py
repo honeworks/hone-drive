@@ -46,7 +46,9 @@ def summary(run: Run) -> list[str]:
     lines.append("")
     for store in sorted(run.stores, key=lambda s: -(s.bytes or 0)):
         note = " (via the Ollama server: its folder is not readable)" if store.source == "ollama api" else ""
-        lines.append(f"{text.size(store.bytes):>9}  {store.title}  {store.path or '?'}{note}")
+        lines.append(
+            f"{text.size(store.bytes):>9}  {store.title}  {store.path or ('several folders' if store.items else '?')}{note}"
+        )
     for acc in run.accounting:
         if acc.measure_command:
             lines += [
