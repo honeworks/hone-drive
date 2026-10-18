@@ -92,5 +92,5 @@ def _open_windows(path: str, write: bool) -> Opened:  # pragma: no cover - runs 
     if handle is None or handle == ctypes.c_void_p(-1).value:
         flags = (os.O_WRONLY | os.O_CREAT | os.O_TRUNC) if write else os.O_RDONLY
         return Opened(_wrap(os.open(path, flags | binary), write), "possibly-cached")
-    fd: int = getattr(msvcrt, "open_osfhandle")(handle, 0 if write else os.O_RDONLY)  # noqa: B009
+    fd: int = getattr(msvcrt, "open_osfhandle")(handle, os.O_WRONLY if write else os.O_RDONLY)  # noqa: B009
     return Opened(_wrap(fd, write), "direct")

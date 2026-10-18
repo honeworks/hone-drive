@@ -1,6 +1,8 @@
 # hone-drive: the design (0.1)
 
-**Status:** accepted in [changes/0001](changes/0001-initial-design.md) on 2026-10-18; being built (milestones M1–M4).
+**Status:** accepted in [changes/0001](changes/0001-initial-design.md) on 2026-10-18; milestones M1 to M4
+built the same day. Verified on the Linux reference machine; the macOS and Windows probes and direct I/O
+are tested against hand-written fixtures and in CI, not yet on real Macs and PCs (decision D-012).
 Section numbers are stable; code comments will refer to them ("design §6.2"). The evidence behind the
 defaults is in [history/0000-research.md](history/0000-research.md); smaller choices and the open
 questions are in [decisions.md](decisions.md).

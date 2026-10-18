@@ -8,6 +8,9 @@ design changed is in [`design/changes/`](design/changes/).
 
 ### Added
 
+- Milestone M4 of [0001](design/changes/0001-initial-design.md), macOS and Windows: the probes and
+  direct I/O for both, tested against hand-written fixtures and in CI on Ubuntu, macOS and Windows; not
+  yet checked on a real Mac or PC (D-012).
 - Milestone M3 of [0001](design/changes/0001-initial-design.md), advice and the dashboard: the ten
   advice rules with per-OS commands that hone-drive never runs (D-018); run comparison; reports with
   private details removed; the local dashboard (Overview, Drives, Benchmark, Models, Advice, History)
