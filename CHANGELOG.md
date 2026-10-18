@@ -6,6 +6,17 @@ design changed is in [`design/changes/`](design/changes/).
 
 ## [Unreleased]
 
+### Changed
+
+- The dashboard, rebuilt around the user's questions ([0002](design/changes/0002-a-dashboard-people-understand.md)):
+  drives by name, verdicts in words, a headline, the advice as an ordered plan with checkboxes, one-click
+  speed tests with a progress bar in words. Advice text names drives instead of mount points.
+
+### Fixed
+
+- A USB SSD whose bridge reports it as rotational is recognised as an SSD; a model name that already
+  names its maker is not prefixed with the vendor again. The Linux USB fixture is now a real recording.
+
 ### Added
 
 - Milestone M4 of [0001](design/changes/0001-initial-design.md), macOS and Windows: the probes and

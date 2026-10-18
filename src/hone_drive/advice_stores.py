@@ -6,8 +6,9 @@ from datetime import datetime, timedelta
 
 from hone_drive import commands, text
 from hone_drive.estimates import copy_time, load_time
-from hone_drive.filesystems import native_filesystem
+from hone_drive.filesystems import display_name, native_filesystem
 from hone_drive.model import Advice, Gain, Run, Store, Volume
+from hone_drive.presentation import volume_names
 
 MOVE_MIN = 20e9  # stores from 20 GB up are worth moving (A02)
 CACHE_MIN = 1e9
@@ -54,10 +55,10 @@ def planned_moves(run: Run) -> list[tuple[Store, Volume, Volume]]:
 
 def a02_move_stores(run: Run, home: str) -> list[Advice]:
     found: list[Advice] = []
+    names = volume_names(run)
     for store, source, target in planned_moves(run):
         why = [
-            f"{store.title} takes {text.size(store.bytes)} of {source.mount} "
-            f"({text.percent(source.used_fraction)} full); {target.mount} has "
+            f"Frees {text.size(store.bytes)} on {names[source.mount]}; {names[target.mount]} has "
             f"{text.size(target.free_bytes)} free."
         ]
         cites = [f"volume:{source.mount}", f"volume:{target.mount}"]
@@ -66,28 +67,30 @@ def a02_move_stores(run: Run, home: str) -> list[Advice]:
             now, then = load_time(item, source.mount, run), load_time(item, target.mount, run)
             if now and then:
                 why.append(
-                    f"{item.names[0]} ({text.size(item.bytes)}) would load in about "
-                    f"{text.seconds(then.seconds)} instead of {text.seconds(now.seconds)} ({then.basis}; "
-                    "disk time only)."
+                    f"{item.names[0]} ({text.size(item.bytes)}) would take about "
+                    f"{text.seconds(then.seconds)} to load instead of {text.seconds(now.seconds)}."
                 )
                 cites += now.cites + then.cites
         copying = copy_time(store, source.mount, target.mount, run)
         if copying:
-            why.append(f"Copying it takes about {text.seconds(copying.seconds)}.")
+            why.append(f"Copying takes about {text.seconds(copying.seconds)}.")
         if models:
-            why.append("Speed once a model is loaded doesn't change: it runs from GPU memory and RAM.")
+            why.append(
+                "Only loading gets slower: once a model is loaded it runs from GPU memory and RAM "
+                "at the same speed."
+            )
         found.append(
             Advice(
                 rule="A02",
                 severity="suggest",
-                title=f"Move {store.title} to {target.mount}",
+                title=f"Move {store.title} to {names[target.mount]}",
                 why=why,
                 cites=sorted(set(cites)),
                 gain=Gain(bytes_freed=store.bytes),
                 commands={run.machine.os: commands.move_store(store, target, run.machine.os, home)},
                 risks=[
                     "Copy first and check the tool sees its models before deleting the old copy.",
-                    f"The tool can't find its models while {target.mount} is unplugged.",
+                    f"The tool can't find its models while {names[target.mount]} is unplugged.",
                 ],
             )
         )
@@ -110,31 +113,31 @@ def a05_filesystem(run: Run, home: str) -> list[Advice]:
         services = [
             s.title for s in moving.get(volume.mount, []) if s.id in SERVICE_STORES and os_name != "windows"
         ]
-        why = [
-            f"{volume.mount} is {volume.filesystem}: "
-            + ", ".join(
-                n
-                for n, ok in (
-                    ("no Unix permissions", traits.posix_permissions),
-                    ("no hard links", traits.hard_links),
-                    ("no symlinks", traits.symlinks),
-                    ("no journal", traits.journaled),
-                )
-                if not ok
+        missing = [
+            n
+            for n, ok in (
+                ("file owners", traits.posix_permissions),
+                ("hard links", traits.hard_links),
+                ("symlinks", traits.symlinks),
             )
-            + "."
+            if not ok
+        ]
+        why = [
+            f"It's formatted as {display_name(volume.filesystem)}, which can't store "
+            + (", ".join(missing[:-1]) + " or " + missing[-1] if len(missing) > 1 else "".join(missing))
+            + (" and has no journal to protect it when unplugged." if not traits.journaled else ".")
         ]
         if services:
-            why.append(f"{', '.join(services)} run as their own user, which can't own files there.")
+            why.append(f"{' and '.join(services)} run as their own user and can't own files there.")
         why.append(
-            f"For a drive that stays with this machine, {native_filesystem(os_name)} has all of these; "
-            "exFAT is only worth keeping to move files between operating systems."
+            f"{native_filesystem(os_name)} has all of these. exFAT is only worth keeping for a drive you "
+            "move between Windows, macOS and Linux."
         )
         found.append(
             Advice(
                 rule="A05",
                 severity="warn" if services else "suggest",
-                title=f"Reformat {volume.mount} as {native_filesystem(os_name)} before moving models to it",
+                title=f"Reformat {volume_names(run)[volume.mount]} as {native_filesystem(os_name)}",
                 why=why,
                 cites=[f"volume:{volume.mount}"],
                 commands={os_name: commands.reformat(volume, os_name)},
@@ -157,11 +160,11 @@ def a06_mount_at_boot(run: Run, home: str) -> list[Advice]:
             Advice(
                 rule="A06",
                 severity="suggest",
-                title=f"Mount {volume.mount} at boot",
+                title=f"Make {volume_names(run)[volume.mount]} available at startup",
                 why=[
-                    f"{volume.mount} is mounted when you log in, after services such as Ollama and Docker "
-                    "start: they would find no models.",
-                    "The `nofail` option lets the machine boot normally when the drive is unplugged.",
+                    "Right now it's mounted when you log in, after Ollama and Docker have started, so they "
+                    "wouldn't find their models.",
+                    "The `nofail` option lets the computer start normally when the drive is unplugged.",
                 ],
                 cites=[f"volume:{volume.mount}"],
                 commands={run.machine.os: commands.mount_at_boot(volume, run.machine.os)},
@@ -188,10 +191,7 @@ def a07_caches(run: Run, home: str) -> list[Advice]:
             lines = commands.clean_cache(command, item.path or "", os_name)
             if not lines:
                 continue
-            why = [
-                f"{item.names[0]} takes {text.size(item.bytes)}; cleaning frees about {text.size(reclaim)}.",
-                "Tools download what they need again later.",
-            ]
+            why = [f"Frees {text.size(reclaim)}. Tools download what they need again later."]
             if item.details.get("same_volume") == "true":
                 why.append(
                     "Clean it, don't move it: it links files into your projects, which only works on the "
@@ -201,7 +201,7 @@ def a07_caches(run: Run, home: str) -> list[Advice]:
                 Advice(
                     rule="A07",
                     severity="suggest",
-                    title=f"Clean {item.names[0]}",
+                    title=f"Clean {_cache_name(store.id, item.names[0])}",
                     why=why,
                     cites=[f"store:{store.id}"],
                     gain=Gain(bytes_freed=reclaim),
@@ -242,6 +242,7 @@ def a08_duplicates(run: Run, home: str) -> list[Advice]:
 def a09_keep_fast(run: Run, home: str) -> list[Advice]:
     found: list[Advice] = []
     now = datetime.fromisoformat(run.created)
+    names = volume_names(run)
     for store, source, target in planned_moves(run):
         for item in store.items:
             if not item.accessed or not item.bytes or item.bytes < 5e9:
@@ -255,10 +256,11 @@ def a09_keep_fast(run: Run, home: str) -> list[Advice]:
                 Advice(
                     rule="A09",
                     severity="info",
-                    title=f"Keep {item.names[0]} on {source.mount}",
+                    title=f"Keep {item.names[0]} on {names[source.mount]}",
                     why=[
-                        f"It was used in the last two weeks and loads in {text.seconds(here.seconds)} from "
-                        f"{source.mount} but {text.seconds(there.seconds)} from {target.mount}.",
+                        f"You used it in the last two weeks. It loads in {text.seconds(here.seconds)} from "
+                        f"{names[source.mount]} but would take {text.seconds(there.seconds)} from "
+                        f"{names[target.mount]}.",
                         "When moving the rest of the store, leave this file where it is: "
                         + (
                             "ComfyUI reads both folders."
@@ -271,3 +273,7 @@ def a09_keep_fast(run: Run, home: str) -> list[Advice]:
                 )
             )
     return found
+
+
+def _cache_name(store_id: str, name: str) -> str:
+    return f"Docker {name.lower()}" if store_id == "docker" else name

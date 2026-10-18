@@ -113,15 +113,15 @@ def by_rule(run: Run) -> dict[str, list[str]]:
 
 def test_the_reference_machine_gets_the_sessions_advice() -> None:
     found = by_rule(reference_run())
-    assert found["A01"] == ["/ is 89% full"]
-    assert f"Move Ollama models to {EXT}" in found["A02"]
-    assert f"Move ComfyUI models to {EXT}" in found["A02"]
-    assert found["A03"] == ["PNY RP60 PSSD could be faster on another cable or port"]
-    assert found["A04"] == ["/ writes slowly because it is nearly full"]
-    assert found["A05"] == [f"Reformat {EXT} as ext4 before moving models to it"]
-    assert found["A06"] == [f"Mount {EXT} at boot"]
-    assert "Clean uv packages" in found["A07"] and "Clean Build Cache" in found["A07"]
-    assert found["A09"] == ["Keep wan.safetensors on /"]
+    assert found["A01"] == ["Internal drive is 89% full"]
+    assert "Move Ollama models to PNY RP60 PSSD" in found["A02"]
+    assert "Move ComfyUI models to PNY RP60 PSSD" in found["A02"]
+    assert found["A03"] == ["PNY RP60 PSSD could be faster with another cable or port"]
+    assert found["A04"] == ["Internal drive writes slowly because it's almost full"]
+    assert found["A05"] == ["Reformat PNY RP60 PSSD as ext4"]
+    assert found["A06"] == ["Make PNY RP60 PSSD available at startup"]
+    assert "Clean uv packages" in found["A07"] and "Clean Docker build cache" in found["A07"]
+    assert found["A09"] == ["Keep wan.safetensors on Internal drive"]
 
 
 def test_advice_cites_and_never_runs() -> None:
@@ -129,11 +129,11 @@ def test_advice_cites_and_never_runs() -> None:
     for item in advise(run, HOME):
         assert item.why and item.cites
         assert all(os == "linux" for os in item.commands)
-    move = next(a for a in advise(run, HOME) if a.title == f"Move Ollama models to {EXT}")
+    move = next(a for a in advise(run, HOME) if a.title == "Move Ollama models to PNY RP60 PSSD")
     text = "\n".join(move.commands["linux"])
     assert "OLLAMA_MODELS=" in text and "chown -R ollama:ollama" in text and "rm -rf" in text.split("\n")[-1]
     assert "seq-read@/" in move.cites and f"seq-read@{EXT}" in move.cites
-    assert any("would load in about" in w for w in move.why)
+    assert any("would take about" in w for w in move.why)
 
 
 def test_ranking_warn_first_then_space() -> None:

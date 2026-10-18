@@ -106,9 +106,10 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   arguments. `hone_drive.testing.RecordedSystem` answers both from a JSON fixture, and `record()` writes
   one from the machine it runs on, with serials, UUIDs, the host and user names replaced.
 - **Why:** a Linux probe can then be tested on macOS and Windows CI and the other way round; a
-  contributor with a new machine adds a fixture with one command. The Linux fixture is recorded on the
-  reference machine; its USB drive part and the macOS and Windows fixtures were written by hand from
-  documented formats (their `note` says so) until recordings from real machines replace them.
+  contributor with a new machine adds a fixture with one command. Both Linux fixtures are recorded on
+  the reference machine (the USB one with the PNY plugged in; recording it found that its USB bridge
+  reports the SSD as rotational). The macOS and Windows fixtures were written by hand from documented
+  formats (their `note` says so) until recordings from real machines replace them.
 - **Status:** follows the design (0001).
 
 ## D-013: the benchmark engine is plain Python  (2026-10-18)

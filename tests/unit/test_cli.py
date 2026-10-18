@@ -95,7 +95,11 @@ def test_advise_compare_report_and_dashboard(
     save_run(b)
     assert cli.main(["advise", a.id]) == 0
     out = capsys.readouterr().out
-    assert "[A01 warn] / is 89% full" in out and "    $ sudo systemctl stop ollama" in out and "    ! " in out
+    assert (
+        "[A01 warn] Internal drive is 89% full" in out
+        and "    $ sudo systemctl stop ollama" in out
+        and "    ! " in out
+    )
     assert cli.main(["advise", "--json"]) == 0 and capsys.readouterr().out.startswith('[{"unknown"')
     assert cli.main(["compare", a.id]) == 0 and "volume  /:" in capsys.readouterr().out
     assert cli.main(["compare", a.id, a.id]) == 0 and "No changes" in capsys.readouterr().out

@@ -62,3 +62,21 @@ def traits(filesystem: str, os_name: str) -> Traits | None:
 
 def native_filesystem(os_name: str) -> str:
     return {"linux": "ext4", "macos": "APFS", "windows": "NTFS"}[os_name]
+
+
+DISPLAY = {
+    "exfat": "exFAT",
+    "vfat": "FAT32",
+    "ntfs": "NTFS",
+    "apfs": "APFS",
+    "hfs": "HFS+",
+    "btrfs": "Btrfs",
+    "xfs": "XFS",
+    "zfs": "ZFS",
+    "refs": "ReFS",
+}
+
+
+def display_name(filesystem: str) -> str:
+    """How people write a filesystem's name: exFAT, NTFS, ext4."""
+    return DISPLAY.get(normalise(filesystem), filesystem)
