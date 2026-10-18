@@ -24,6 +24,22 @@ uv run pytest                        # default suite (fast, offline, determinist
 scripts/gpu-lock.sh uv run pytest -m bench   # full-size benchmarks on real drives, under the machine-wide lock
 ```
 
+## Layout
+
+```
+src/hone_drive/
+  model.py               the data model (design §2); every fact that can be missing has a reason in `unknown`
+  ports.py               the Probe port; probe_linux.py, probe_macos.py, probe_windows.py implement it
+  system.py              the only module that starts processes: commands with timeouts, read-only files
+  links.py  filesystems.py  volumes.py    links and expected speeds, filesystem traits, volumes (psutil)
+  stores.py  store_*.py  sizing.py         store finders (design §5.1) and how space is counted
+  accounting.py  duplicates.py             unaccounted space, byte-identical duplicates
+  scanner.py             scan(): one look at the machine
+  runs.py                runs on disk;  text.py: sizes and speeds for people;  cli.py: the command line
+  testing.py             FakeProbe, recorded machines, record(), check_probe()
+tests/unit|contract|integration|e2e   tests/fixtures/<os>/<machine>.json: recorded or hand-written machines
+```
+
 ## Rules
 
 1. **Simple first** ([CONTRIBUTING.md](CONTRIBUTING.md#keep-it-simple)): the plainest code that meets the

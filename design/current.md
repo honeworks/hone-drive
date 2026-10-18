@@ -75,11 +75,14 @@ class Probe(Protocol):
     def machine(self) -> MachineFacts: ...        # OS, CPU, RAM, GPUs
     def drives(self) -> list[Drive]: ...          # physical drives with their links
     def volumes(self) -> list[Volume]: ...        # mounted filesystems, mapped to drives
+    def commands(self) -> list[ProbeCommand]: ... # the commands it ran, for the run (§9)
 ```
 
 `probe_for(sys.platform)` picks `LinuxProbe`, `MacProbe` or `WindowsProbe`. Each runs only read-only
 commands and files, never as administrator, each with a timeout, and records the commands it ran in the
-run (§9) so a user can repeat them.
+run (§9) so a user can repeat them. Probes take their command runner and file reader as arguments, so the
+tests replay a recorded machine on any OS (§14, decision D-012). Commands run in the C locale, so numbers
+are never written with a decimal comma (history §2).
 
 ### 3.2 Where the facts come from
 
@@ -153,7 +156,7 @@ id (CONTRIBUTING "Variants": a dict of functions, not a class hierarchy). 0.1 kn
 
 | Store id | Default locations (overridden by) | Items |
 |---|---|---|
-| `ollama` | Linux service `/usr/share/ollama/.ollama/models`, `/var/lib/ollama`; user `~/.ollama/models`; macOS `~/.ollama/models`; Windows `%USERPROFILE%\.ollama\models` (`OLLAMA_MODELS`, also read from the systemd unit or launchd plist when readable) | models from `manifests/`, sized by their unique blobs |
+| `ollama` | Linux service `/usr/share/ollama/.ollama/models`, `/var/lib/ollama`; user `~/.ollama/models`; macOS `~/.ollama/models`; Windows `%USERPROFILE%\.ollama\models` (`OLLAMA_MODELS`, also read from the systemd unit) | models from `manifests/`, sized by their unique blobs; when the folder belongs to the service's own user, from the local Ollama server's `/api/tags` (decision D-010) |
 | `huggingface` | `~/.cache/huggingface/hub` (`HF_HUB_CACHE`, `HF_HOME`) | repos (`models--org--name`), sized by unique blobs |
 | `comfyui` | folders named `ComfyUI` with a `models/` folder under the home folder, two levels deep, plus `extra_model_paths.yaml` entries and paths the user adds | model files by subfolder (`checkpoints`, `diffusion_models`, `text_encoders`, `loras`, …) |
 | `lmstudio` | `~/.lmstudio/models`, `~/.cache/lm-studio/models` | model files |
@@ -183,8 +186,11 @@ duplicate and is never reported as one; the history explains why (history §4).
 
 ### 5.4 Unaccounted space
 
-For each volume: `unaccounted = used − (bytes of every store, user folder and system folder hone-drive
-could read on it)`. When it is over 5% of the volume, the dashboard shows it with the likely hiding places
+For each volume: `unaccounted = used − readable − explained`, where `readable` is what a walk of the volume
+as the user could count (without crossing into other mounts) and `explained` is the stores on it that the
+walk couldn't read but a server sized (Ollama's service folder through its API, Docker's data root). The
+walk takes minutes on a large disk, so it runs only when asked (`scan --account`, the dashboard's
+"Account for space"; decision D-011); it also lists the biggest folders two levels down. When it is over 5% of the volume, the dashboard shows it with the likely hiding places
 for this OS (other users' home folders, model servers running as their own user, container data roots,
 deleted files still held open, snapshots, swap files) and the administrator command that would measure
 them (`sudo du -xh --max-depth=3 / | sort -rh | head -40` on Linux and its equivalents), which it shows
@@ -316,15 +322,17 @@ human summary, or the run's JSON with `--json`. The CLI uses `argparse` (decisio
 ```python
 from hone_drive import scan, bench, advise, compare, load_run, report
 
-run = scan(duplicates=False)                    # Machine, drives, volumes, stores; no benchmarks
+run = scan(accounting=False, duplicates=False)  # Machine, drives, volumes, stores; no benchmarks
 run = bench(run, volumes=["/", "/mnt/ext"], tests=["seq", "model"])
 for a in advise(run):
     print(a.severity, a.title, a.gain)
 ```
 
 The public names are exported from `hone_drive/__init__.py` with `__all__`. `hone_drive.testing` provides
-`FakeProbe` (machines described in data, including this design's reference machine), the `Probe`
-contract checker and a fake filesystem helper for store finders.
+`FakeProbe` (machines described in data; `reference_probe()` is this design's reference machine),
+`RecordedSystem` and `recorded_probe()` (a machine replayed from a fixture), `record()` (`python -m
+hone_drive.testing out.json` records this machine with serials, UUIDs and names replaced) and the `Probe`
+contract checker `check_probe()`.
 
 ## 13. Reports and privacy
 

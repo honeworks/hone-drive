@@ -1,0 +1,59 @@
+{
+ "commands": [
+  {
+   "args": [
+    "powershell",
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    "*"
+   ],
+   "code": 0,
+   "stdout": "{\"cpu\": \"AMD Ryzen 9 7950X 16-Core Processor\", \"ram\": 68719476736, \"os\": \"Microsoft Windows 11 Pro\", \"gpus\": [{\"Name\": \"NVIDIA GeForce RTX 4090\", \"AdapterRAM\": 4293918720}], \"disks\": [{\"DeviceId\": \"0\", \"FriendlyName\": \"Samsung SSD 990 PRO 2TB\", \"SerialNumber\": \"SERIAL1\", \"Size\": 2000398934016, \"BusType\": \"NVMe\", \"MediaType\": \"SSD\"}, {\"DeviceId\": \"1\", \"FriendlyName\": \"PNY RP60 PSSD\", \"SerialNumber\": \"SERIAL2\", \"Size\": 1024209543168, \"BusType\": \"USB\", \"MediaType\": \"SSD\"}], \"removable\": [{\"Number\": 0, \"Removable\": false}, {\"Number\": 1, \"Removable\": true}], \"partitions\": [{\"Letter\": \"C\", \"DiskNumber\": 0}, {\"Letter\": \"E\", \"DiskNumber\": 1}], \"volumes\": {\"Letter\": \"E\", \"FileSystemLabel\": \"PNYRP60PSSD\", \"UniqueId\": \"\\\\\\\\?\\\\Volume{aaaaaaaa-0000-0000-0000-000000000000}\\\\\"}}"
+  },
+  {
+   "args": [
+    "nvidia-smi",
+    "--query-gpu=name,memory.total",
+    "--format=csv,noheader,nounits"
+   ],
+   "code": 0,
+   "stdout": "NVIDIA GeForce RTX 4090, 24564\n"
+  }
+ ],
+ "hostname": "host",
+ "note": "Written by hand from the documented output of the Windows storage cmdlets, not recorded on a real machine: a desktop with an NVMe system drive and a USB SSD. Replace with a recording from a real PC.",
+ "os": "windows",
+ "partitions": [
+  [
+   "C:\\",
+   "C:\\",
+   "NTFS",
+   "rw,fixed"
+  ],
+  [
+   "E:\\",
+   "E:\\",
+   "exFAT",
+   "rw,removable"
+  ],
+  [
+   "D:\\",
+   "D:\\",
+   "",
+   "cdrom"
+  ]
+ ],
+ "usage": {
+  "C:\\": [
+   2000396300288,
+   1500297225216,
+   500099075072
+  ],
+  "E:\\": [
+   1024208404480,
+   2293760,
+   1024206110720
+  ]
+ }
+}
