@@ -24,6 +24,7 @@ from hone_drive.system import TIMEOUT_S, LocalFiles, Output, SubprocessRunner
 from hone_drive.volumes import Partition, disk_usage, psutil_partitions
 
 GB = 1000**3
+UUID_TEXT = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 
 
 @dataclass
@@ -218,19 +219,28 @@ def redact(data: dict[str, Any], serials: list[str]) -> dict[str, Any]:
     files = cast(dict[str, str], data.get("files", {}))
     if "/proc/cpuinfo" in files:
         files["/proc/cpuinfo"] = files["/proc/cpuinfo"].split("\n\n")[0] + "\n"  # one processor is enough
-    text = json.dumps(data)
-    for index, serial in enumerate(serials, 1):
-        text = text.replace(serial, f"SERIAL{index}")
-    text = text.replace(str(data.get("hostname", "\0")), "host")
     home = str(Path.home())
     user = Path(home).name
-    text = text.replace(json.dumps(home)[1:-1], "/home/user").replace(f"/{user}/", "/user/")
-    text = re.sub(
-        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
-        "00000000-0000-0000-0000-000000000000",
-        text,
-    )
-    return cast(dict[str, Any], json.loads(text))
+    swaps = [(s, f"SERIAL{i}") for i, s in enumerate(serials, 1)]
+    swaps += [
+        (str(data.get("hostname", "\0")), "host"),
+        (home, "/home/user"),
+        (f"/{user}/", "/user/"),
+        (f"\\{user}\\", "\\user\\"),
+    ]
+
+    def clean(value: Any) -> Any:  # replaced in every string, never in the JSON text (escapes stay valid)
+        if isinstance(value, str):
+            for old, new in swaps:
+                value = value.replace(old, new)
+            return UUID_TEXT.sub("00000000-0000-0000-0000-000000000000", value)
+        if isinstance(value, list):
+            return [clean(v) for v in cast(list[Any], value)]
+        if isinstance(value, dict):
+            return {clean(k): clean(v) for k, v in cast(dict[Any, Any], value).items()}
+        return value
+
+    return cast(dict[str, Any], clean(data))
 
 
 # -- the contract ------------------------------------------------------------------------------------------
@@ -253,7 +263,9 @@ def check_probe(probe: Probe) -> None:
         _check_link(drive.link)
     ids = {d.id for d in drives}
     for volume in probe.volumes():
-        assert volume.used_bytes + volume.free_bytes <= volume.total_bytes * 1.0001, volume.mount
+        # used + free may exceed total on APFS: volumes of one container share its free space
+        assert volume.used_bytes <= volume.total_bytes, volume.mount
+        assert volume.free_bytes <= volume.total_bytes, volume.mount
         assert volume.drive_id in ids or "drive_id" in volume.unknown, volume.mount
     assert isinstance(probe.commands(), list)
 

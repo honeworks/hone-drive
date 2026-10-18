@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -154,10 +155,10 @@ def test_extra_model_paths_subset() -> None:
         "a1111:\n    base_path: webui\n    vae: models/VAE\n"
     )
     assert extra_model_paths(text, "/opt/ComfyUI") == [
-        "/data/models/ckpt/",
-        "/data/models/te/",
-        "/data/C:/x/",
-        "/opt/ComfyUI/webui/models/VAE",
+        os.path.join("/data/", "models/ckpt/"),
+        os.path.join("/data/", "models/te/"),
+        os.path.join("/data/", "C:/x/"),
+        os.path.join("/opt/ComfyUI", "webui", "models/VAE"),
     ]
 
 
@@ -225,7 +226,7 @@ def test_folder_stores_and_custom(ctx: Context, home: Path) -> None:
 def test_candidates_and_blocked(ctx: Context, home: Path) -> None:
     ctx.env["X"] = "/x"
     assert candidates_for(ctx, ["$X/sub", "$UNSET/y", "~/a", "~/a", "$X"]) == [
-        "/x/sub",
+        str(Path("/x", "sub")),
         str(home / "a"),
         "/x",
     ]

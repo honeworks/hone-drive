@@ -47,6 +47,6 @@ def test_one_benchmark_per_machine(data_home: Path) -> None:
     (data_home / "bench.lock").write_text("999999999")  # a process that is gone
     with safety.machine_lock():
         pass
-    (data_home / "bench.lock").write_text("1")  # process 1 is always running
+    (data_home / "bench.lock").write_text(str(os.getppid()))  # our parent is running
     with pytest.raises(BenchmarkBusy), safety.machine_lock():
         pass

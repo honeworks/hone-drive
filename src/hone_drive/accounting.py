@@ -106,6 +106,6 @@ def _outermost(paths: list[str]) -> list[str]:
     """Unreadable folders without the ones inside another listed folder."""
     kept: list[str] = []
     for path in sorted(set(paths)):
-        if not any(path.startswith(k.rstrip(os.sep) + os.sep) for k in kept):
+        if not any(path.startswith((k.rstrip("/\\") + "/", k.rstrip("/\\") + "\\")) for k in kept):
             kept.append(path)
     return kept
