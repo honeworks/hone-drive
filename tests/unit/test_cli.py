@@ -63,3 +63,25 @@ def test_errors_are_one_line(capsys: pytest.CaptureFixture[str], data_home: Path
 def test_no_command_scans(fake_scan: None, capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main([]) == 0
     assert "saved as run" in capsys.readouterr().out
+
+
+def test_bench_command_on_a_stored_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from tests.unit.test_benchmark import local_run
+
+    run = local_run(tmp_path)
+    from hone_drive.runs import save_run
+
+    save_run(run)
+    assert cli.main(["bench", str(tmp_path), "--size", "16M", "--run", run.id]) == 0
+    out = capsys.readouterr().out
+    assert "seq-write" in out and "seq-read" in out and "saved as run" in out
+    assert cli.main(["bench", str(tmp_path), "--size", "16M", "--run", run.id, "--json"]) == 0
+    assert '"seq-read"' in capsys.readouterr().out
+    assert cli.main(["show", run.id]) == 0 and "seq-read" in capsys.readouterr().out
+
+
+def test_parse_size() -> None:
+    assert cli.parse_size("4G") == 4 * 1024**3
+    assert cli.parse_size("512MiB") == 512 * 1024**2
+    assert cli.parse_size("1.5g") == int(1.5 * 1024**3)
+    assert cli.parse_size("4096") == 4096

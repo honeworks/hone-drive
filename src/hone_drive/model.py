@@ -15,6 +15,7 @@ Bus = Literal["pcie", "sata", "usb", "thunderbolt", "mmc", "virtual", "other"]
 DriveKind = Literal["nvme", "sata-ssd", "hdd", "usb-ssd", "usb-hdd", "sd-card", "virtual", "other"]
 Severity = Literal["info", "suggest", "warn"]
 CacheBypass = Literal["direct", "fallback", "possibly-cached"]
+TestName = Literal["seq-write", "seq-read", "sustained-write", "random-read", "model-read"]
 
 
 class Facts(BaseModel):
@@ -150,7 +151,7 @@ class Duplicate(Facts):
 
 class Measurement(Facts):
     id: str  # "<test>@<volume>", unique within a run
-    test: Literal["seq-write", "seq-read", "sustained-write", "random-read", "model-read"]
+    test: TestName
     volume: str
     bytes: int
     seconds: float

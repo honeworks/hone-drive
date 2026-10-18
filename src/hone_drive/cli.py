@@ -77,6 +77,50 @@ def cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def parse_size(value: str) -> int:
+    """`4G`, `512M`, `1.5G` (binary units, as the benchmark writes in 16 MiB chunks)."""
+    units = {"K": 1024, "M": 1024**2, "G": 1024**3, "T": 1024**4}
+    value = value.strip().upper().removesuffix("B").removesuffix("I")
+    if value and value[-1] in units:
+        return int(float(value[:-1]) * units[value[-1]])
+    return int(value)
+
+
+def measurements(run: Run) -> list[str]:
+    lines: list[str] = []
+    for m in run.measurements:
+        extra = f" · {m.iops:,.0f} IOPS at 32 in flight, {m.latency_ms} ms one at a time" if m.iops else ""
+        label = f" · {m.label}" if m.label else ""
+        cache = "" if m.cache == "direct" else f" · cache: {m.cache}"
+        stopped = "  (stopped early)" if m.partial else ""
+        lines.append(f"{m.test:>15} {m.volume}  {text.speed(m.gbs)}{extra}{label}{cache}{stopped}")
+    return lines
+
+
+def cmd_bench(args: argparse.Namespace) -> int:
+    from hone_drive.benchmark import Options, Tick, bench, default_folders  # noqa: PLC0415
+    from hone_drive.scanner import Progress, scan  # noqa: PLC0415
+
+    progress: Progress | None = None if args.json else (lambda message: _err(f"… {message}"))
+    run = load_run(args.run) if args.run else scan(progress=progress)
+    folders: list[str] = args.paths or default_folders(run, str(Path.home()))
+
+    def tick(t: Tick) -> None:
+        sys.stderr.write(f"\r{t.test} {t.volume}: {100 * t.done // max(t.total, 1)}% {text.speed(t.gbs)}   ")
+
+    options = Options(size=parse_size(args.size), model_files=args.model, on_tick=None if args.json else tick)
+    bench(run, folders, args.tests.split(","), options)
+    save_run(run)
+    if args.json:
+        _out(run.model_dump_json(indent=1))
+        return 0
+    _err("")
+    for line in measurements(run):
+        _out(line)
+    _out(f"\nsaved as run {run.id}")
+    return 0
+
+
 def cmd_runs(args: argparse.Namespace) -> int:
     for run_id in list_runs():
         _out(run_id)
@@ -88,7 +132,7 @@ def cmd_show(args: argparse.Namespace) -> int:
     if args.json:
         _out(run.model_dump_json(indent=1))
     else:
-        for line in summary(run):
+        for line in [*summary(run), "", *measurements(run)]:
             _out(line)
     return 0
 
@@ -105,6 +149,19 @@ def parser() -> argparse.ArgumentParser:
     scan.add_argument("--duplicates", action="store_true", help="hash same-size files across stores")
     scan.add_argument("--json", action="store_true")
     scan.set_defaults(func=cmd_scan)
+    bench = sub.add_parser("bench", help="measure drives with the page cache bypassed")
+    bench.add_argument(
+        "paths",
+        nargs="*",
+        metavar="PATH",
+        help="folders on the drives to test (default: home and every external drive)",
+    )
+    bench.add_argument("--tests", default="seq", help="comma-separated: seq, random, sustained, model")
+    bench.add_argument("--size", default="4G", help="size of the test file (default 4G)")
+    bench.add_argument("--model", action="append", default=[], metavar="FILE", help="a model file to read")
+    bench.add_argument("--run", help="add the measurements to this stored run instead of a new scan")
+    bench.add_argument("--json", action="store_true")
+    bench.set_defaults(func=cmd_bench)
     sub.add_parser("runs", help="list stored runs, newest first").set_defaults(func=cmd_runs)
     show = sub.add_parser("show", help="show a stored run")
     show.add_argument("run", nargs="?", default="latest")
