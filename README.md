@@ -157,9 +157,10 @@ print(load_time(model, "/mnt/models", run))  # seconds, a range, and what it is 
 | Drives, volumes, usage | yes (sysfs) | yes (`diskutil`) | yes (storage cmdlets) |
 | Connection speed and lanes | USB, Thunderbolt, PCIe, SATA | USB, NVMe | not reported by Windows |
 | Benchmarks with the cache bypassed | `O_DIRECT` | `F_NOCACHE` | `FILE_FLAG_NO_BUFFERING` |
-| Tested on a real machine | yes | not yet | not yet |
+| Tested | on a real laptop | in CI on GitHub's macOS runners | in CI on GitHub's Windows runners |
 
-The macOS and Windows code is tested against hand-written fixtures and in CI. If you run hone-drive on a
+The macOS and Windows code is tested against hand-written fixtures and on CI runners, not yet on a real
+Mac or PC with an external drive. If you run hone-drive on a
 Mac or a PC, a recording of your machine helps a lot: `python -m hone_drive.testing my-machine.json`
 records what the probe sees with serial numbers, UUIDs and names replaced. Please open an issue with it.
 
