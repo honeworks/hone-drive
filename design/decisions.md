@@ -110,3 +110,23 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   reference machine; its USB drive part and the macOS and Windows fixtures were written by hand from
   documented formats (their `note` says so) until recordings from real machines replace them.
 - **Status:** follows the design (0001).
+
+## D-013: the benchmark engine is plain Python  (2026-10-18)
+
+- **Choice:** sequential tests write and read 16 MiB chunks of random-looking data through one
+  page-aligned `mmap` buffer with the direct-I/O flags of design §6.2, timed with `time.monotonic()`;
+  the spread is the relative standard deviation of the per-chunk speeds. Random reads: 4 KiB at
+  seeded random aligned offsets, one at a time for latency, then 32 threads with their own file handles.
+- **Why:** no tool to install on any OS, and no output to parse (history §2). On the reference machine it
+  measured the internal drive's reads at 2.1–3.1 GB/s and writes at 0.15–0.16 GB/s, the same as `dd`
+  with `O_DIRECT` that afternoon.
+- **Status:** follows the design (0001).
+
+## D-014: a ledger of temporary files  (2026-10-18)
+
+- **Choice:** before a test file is created, its path goes into `bench-files.json` in the data folder;
+  it leaves the ledger when the file is deleted. Every benchmark starts by deleting what the ledger still
+  lists (only files named `.hone-drive-bench-*`).
+- **Why:** design §6.3 rule 1 for a process that is killed (`finally` blocks don't run): the next start
+  must find the file without searching every drive.
+- **Status:** follows the design (0001).

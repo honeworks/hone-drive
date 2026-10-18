@@ -35,6 +35,8 @@ src/hone_drive/
   stores.py  store_*.py  sizing.py         store finders (design §5.1) and how space is counted
   accounting.py  duplicates.py             unaccounted space, byte-identical duplicates
   scanner.py             scan(): one look at the machine
+  benchmark.py  bench_safety.py  directio.py  estimates.py   benchmarks, their safety rules, direct I/O
+                         per OS (the only OS-specific code outside the probes), load and copy times
   runs.py                runs on disk;  text.py: sizes and speeds for people;  cli.py: the command line
   testing.py             FakeProbe, recorded machines, record(), check_probe()
 tests/unit|contract|integration|e2e   tests/fixtures/<os>/<machine>.json: recorded or hand-written machines

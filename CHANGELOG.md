@@ -8,6 +8,11 @@ design changed is in [`design/changes/`](design/changes/).
 
 ### Added
 
+- Milestone M2 of [0001](design/changes/0001-initial-design.md), the benchmarks: sequential write and
+  read, sustained write with a per-second curve, random reads (latency and 32 in flight) and reads of
+  real model files, with the page cache bypassed on Linux, macOS and Windows and the method recorded
+  (D-013); the safety rules of design §6.3 with a ledger of temporary files (D-014) and one benchmark per
+  machine; link-bound and drive-bound labels; load and copy time estimates; `hone-drive bench`.
 - Milestone M1 of [0001](design/changes/0001-initial-design.md), the scan: the data model; the `Probe`
   port with Linux (sysfs), macOS (`diskutil`, `system_profiler`) and Windows (PowerShell storage
   cmdlets) probes; links as negotiated against possible; filesystem traits; store finders for Ollama

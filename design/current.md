@@ -206,7 +206,7 @@ but never runs.
 | `seq-read` | reads that file back | 4 GiB |
 | `sustained-write` | writes until a size or time limit, recording throughput each second: shows the drive's fast cache running out and heat throttling | 32 GiB or 120 s (opt-in) |
 | `random-read` | 4 KiB reads at random offsets in the temporary file, one at a time and 32 in flight | 20 s |
-| `model-read` | reads real files the user picks (or the largest files of a store), read only | up to 3 files |
+| `model-read` | reads real files the user picks (or the three largest single-file items of the stores on that volume), read only | up to 3 files |
 
 A run benchmarks the volumes the user chooses; the default compares the volume holding the home folder
 with every external volume.
@@ -217,7 +217,7 @@ Every read and write test bypasses the operating system's cache, or says it coul
 
 | OS | How |
 |---|---|
-| Linux | `O_DIRECT` with aligned buffers (`mmap`-allocated) |
+| Linux | `O_DIRECT` with aligned buffers (`mmap`-allocated); where a filesystem refuses it, `posix_fadvise(DONTNEED)` after the write (`cache: fallback`) |
 | macOS | `fcntl(F_NOCACHE)` on the file |
 | Windows | `CreateFileW` with `FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH` through `ctypes`, aligned buffers |
 
@@ -229,12 +229,14 @@ parsed from another tool's output (history §2).
 
 ### 6.3 Safety rules
 
-1. The only file written is `<volume>/.hone-drive-bench-<run id>.tmp`, deleted in a `finally` block and
-   again at the next start if a crash left it behind.
+1. The only file written is `<folder>/.hone-drive-bench-<run id>-<test>.tmp`, deleted in a `finally`
+   block. Its path is written to a ledger in the data folder before it is created, so the next benchmark
+   deletes it if a killed process left it behind (decision D-014).
 2. A write test runs only when the volume has its size plus 10% plus 2 GiB free, and stops early if free
    space falls under 2 GiB.
 3. No test writes to a volume that is read-only, the system volume of another OS, or one the user did not
-   select.
+   select; a folder on a filesystem the scan skipped (a RAM disk mounted inside a volume) is refused, so a
+   result is never filed under the wrong volume.
 4. Tests can be stopped at any time; a stop deletes the file and records a partial measurement.
 5. One benchmark at a time per machine (a lock file in the data folder); a scan can run beside it.
 

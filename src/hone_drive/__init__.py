@@ -1,6 +1,9 @@
 """hone-drive: a storage dashboard for AI developers (design/current.md, accepted in change 0001)."""
 
+from hone_drive.benchmark import Options as BenchOptions
+from hone_drive.benchmark import bench
 from hone_drive.errors import BenchmarkBusy, HoneDriveError, NotFound, UnsafeBenchmark, UnsupportedFormat
+from hone_drive.estimates import Estimate, copy_time, load_time
 from hone_drive.model import (
     Accounting,
     Advice,
@@ -22,9 +25,11 @@ from hone_drive.scanner import probe_for, scan
 __all__ = [
     "Accounting",
     "Advice",
+    "BenchOptions",
     "BenchmarkBusy",
     "Drive",
     "Duplicate",
+    "Estimate",
     "HoneDriveError",
     "Item",
     "Link",
@@ -39,8 +44,11 @@ __all__ = [
     "UnsupportedFormat",
     "Volume",
     "__version__",
+    "bench",
+    "copy_time",
     "list_runs",
     "load_run",
+    "load_time",
     "probe_for",
     "save_run",
     "scan",

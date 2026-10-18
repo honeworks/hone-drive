@@ -148,3 +148,91 @@ def test_ac16_scan_json_runs_without_rights_or_extra_tools(tmp_path: Path) -> No
     run = hd.Run.model_validate_json(done.stdout)
     assert run.volumes and run.machine.os in ("linux", "macos", "windows")
     assert (tmp_path / "d" / "runs" / f"{run.id}.json").is_file()
+
+
+# -- benchmarks (milestone M2) -----------------------------------------------------------------------------
+
+BENCH_SCRIPT = """
+import os, sys
+from hone_drive.benchmark import Options, bench
+from hone_drive.model import Volume
+from hone_drive.scanner import scan
+from hone_drive.testing import FakeProbe, reference_probe
+folder, mount = sys.argv[1], sys.argv[2]
+volume = Volume(mount=mount, device="t", filesystem="t", total_bytes=1, used_bytes=0, free_bytes=1)
+run = scan(probe=FakeProbe(reference_probe().facts, [], [volume]), finders={})
+def die(tick):
+    if tick.done >= 16 * 1024 * 1024:
+        os._exit(9)  # killed mid-write: no finally block runs
+bench(run, [folder], ["seq"], Options(size=64 * 1024 * 1024, on_tick=die))
+"""
+
+
+def bench_volume_run(tmp_path: Path) -> hd.Run:
+    mounts = [p.mountpoint for p in psutil.disk_partitions(all=True)]
+    from hone_drive.volumes import disk_usage, mount_of
+
+    mount = mount_of(str(tmp_path.resolve()), mounts) or str(tmp_path)
+    total, used, free = disk_usage(mount)
+    volume = Volume(
+        mount=mount, device="t", filesystem="t", total_bytes=total, used_bytes=used, free_bytes=free
+    )
+    return hd.scan(probe=FakeProbe(reference_probe().facts, [], [volume]), finders={})
+
+
+def test_ac7_every_measurement_records_how_the_cache_was_bypassed(tmp_path: Path) -> None:
+    run = hd.bench(bench_volume_run(tmp_path), [str(tmp_path)], ["seq"], hd.BenchOptions(size=32 * 1024**2))
+    assert run.measurements
+    for m in run.measurements:
+        assert m.cache in ("direct", "fallback", "possibly-cached")
+        if m.cache == "possibly-cached":
+            assert any("memory" in w for w in m.warnings)
+
+
+def test_ac8_the_temporary_file_is_gone_after_a_kill_and_the_next_start(tmp_path: Path) -> None:
+    run = bench_volume_run(tmp_path)
+    env = {**os.environ}
+    done = subprocess.run(
+        [sys.executable, "-c", BENCH_SCRIPT, str(tmp_path), run.volumes[0].mount],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert done.returncode == 9, done.stderr
+    assert list(tmp_path.glob(".hone-drive-bench-*")), "the killed run left its file"
+    hd.bench(run, [str(tmp_path)], ["seq"], hd.BenchOptions(size=16 * 1024**2))
+    assert not list(tmp_path.glob(".hone-drive-bench-*"))
+
+
+def test_ac9_a_write_test_refuses_without_room_and_stops_when_space_runs_low(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = bench_volume_run(tmp_path)
+    with pytest.raises(hd.UnsafeBenchmark, match="GB free"):
+        hd.bench(run, [str(tmp_path)], ["seq"], hd.BenchOptions(size=10**17))
+    monkeypatch.setattr("hone_drive.bench_safety.low_on_space", lambda folder: True)
+    hd.bench(run, [str(tmp_path)], ["seq"], hd.BenchOptions(size=32 * 1024**2))
+    assert [m.partial for m in run.measurements] == [True]
+
+
+def test_ac10_load_times_use_the_measured_read_and_say_disk_time_only() -> None:
+    run = hd.scan(probe=reference_probe(), finders={})
+    item = hd.Item(id="m", names=["gemma4:31b"], bytes=19_000_000_000)
+    by_link = hd.load_time(item, "/run/media/user/PNYRP60PSSD", run)
+    assert by_link is not None and by_link.basis == "expected link speed" and "disk time only" in by_link.note
+    run.measurements = [
+        hd.Measurement(
+            id="seq-read@/",
+            test="seq-read",
+            volume="/",
+            bytes=4_000_000_000,
+            seconds=1.82,
+            gbs=2.2,
+            cache="direct",
+        )
+    ]
+    measured = hd.load_time(item, "/", run)
+    assert measured is not None and measured.basis == "measured seq-read" and measured.cites == ["seq-read@/"]
+    assert round(measured.seconds) == 9
