@@ -78,9 +78,12 @@ class LinuxProbe:
         rotational = read_value(self.files, f"{base}/queue/rotational")
         link = self._link(path)
         rot = rotational == "1" if rotational is not None else None
+        model = self._model(base, path)
+        if link.bus == "usb" and rot and re.search(r"SSD|NVME|FLASH", model or "", re.IGNORECASE):
+            rot = False  # USB bridges often report every drive as rotational (the PNY RP60 does)
         drive = Drive(
             id=name,
-            model=self._model(base, path),
+            model=model,
             serial=self._serial(base, path),
             size_bytes=int(sectors) * 512 if sectors else None,
             kind=_kind(link, rot, name),
@@ -99,7 +102,9 @@ class LinuxProbe:
         usb = _usb_dir(path)
         if usb and not model:
             model = read_value(self.files, f"{usb}/product") or ""
-        text = f"{vendor} {model}".strip() if not vendor.startswith("0x") else model
+        if vendor.startswith("0x") or model.lower().startswith(vendor.lower()):
+            vendor = ""  # PCI ids, or a model that already names its maker ("PNY RP60 PSSD")
+        text = f"{vendor} {model}".strip()
         return " ".join(text.split()) or None
 
     def _serial(self, base: str, path: str) -> str | None:
