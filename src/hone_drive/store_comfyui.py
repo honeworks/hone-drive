@@ -36,7 +36,7 @@ def find_comfyui(ctx: Context) -> list[Store]:
             stores.append(
                 Store(
                     id="comfyui",
-                    title=f"ComfyUI models ({os.path.basename(install)})",
+                    title=_title(install),
                     path=os.path.join(install, "models"),
                     bytes=total.bytes,
                     items=sorted(items, key=lambda i: -(i.bytes or 0)),
@@ -109,3 +109,9 @@ def extra_model_paths(text: str, install: str) -> list[str]:
         elif key not in SKIP_KEYS and value:
             folders.append(os.path.join(base, os.path.expanduser(value)))
     return folders
+
+
+def _title(install: str) -> str:
+    """ "ComfyUI models", with the folder's name when it isn't just "ComfyUI"."""
+    name = os.path.basename(install)
+    return "ComfyUI models" if name.lower() == "comfyui" else f"ComfyUI models ({name})"

@@ -103,8 +103,11 @@ def test_scan_through_the_api_with_events(server: Server) -> None:
     assert any(b"event: progress" in e for e in events) and any(b"event: done" in e for e in events)
     status, body, _ = request(server, "GET", "/api/runs/latest")
     view = json.loads(body)
-    assert status == 200 and {"run", "advice", "drives", "volumes", "models"} <= set(view)
-    assert any(a["rule"] == "A03" for a in view["advice"])
+    assert status == 200 and {"run", "headline", "plan", "drives", "volumes", "models", "biggest"} <= set(
+        view
+    )
+    tasks = [t for step in view["plan"]["steps"] for t in step["tasks"]]
+    assert any(t["rule"] == "A03" for t in tasks)
 
 
 def test_run_view_compare_and_report(server: Server) -> None:
@@ -118,8 +121,13 @@ def test_run_view_compare_and_report(server: Server) -> None:
     view = json.loads(request(server, "GET", f"/api/runs/{second.id}")[1])
     root = next(v for v in view["volumes"] if v["mount"] == "/")
     assert [s["kind"] for s in root["segments"]][:2] == ["ollama", "comfyui"]
-    gemma = next(m for m in view["models"] if m["names"] == ["gemma4:31b"])
+    gemma = next(m for m in view["models"]["rows"] if m["names"] == ["gemma4:31b"])
     assert set(gemma["loads"]) == {"/", "/run/media/user/PNYRP60PSSD"}
+    assert view["headline"]["title"] == "Internal drive is 89% full"
+    assert [s["key"] for s in view["plan"]["steps"]] == ["clean", "prepare", "move", "speed"]
+    pny = next(d for d in view["drives"] if d["external"])
+    assert pny["name"] == "PNY RP60 PSSD" and pny["connection"]["tone"] == "warn"
+    assert pny["speed"]["read"] == 0.97 and pny["test_folder"] == "/run/media/user/PNYRP60PSSD"
     changes = json.loads(request(server, "GET", f"/api/compare?a={first.id}&b={second.id}")[1])["changes"]
     assert changes[0]["kind"] == "link"
     status, text, headers = request(server, "GET", f"/api/report/{second.id}?format=md")

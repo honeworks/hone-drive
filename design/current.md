@@ -306,14 +306,19 @@ opens the browser and prints the address. It uses the standard library's HTTP se
 server-sent events for progress, with the page's HTML, CSS and JavaScript shipped in the package: no
 build step, no CDN, no network.
 
+Every screen speaks in the user's words (change [0002](changes/0002-a-dashboard-people-understand.md)):
+drives by name ("Internal drive", the external drive's model), verdicts with a coloured dot and words,
+sizes and seconds instead of identifiers. `presentation.py` and `views.py` compute the words, names,
+tones and the plan on the server; the page only draws.
+
 | Screen | Shows |
 |---|---|
-| Overview | each volume as a bar (stores stacked, unaccounted space hatched), the top advice, the last run's time |
-| Drives | each drive with its link diagram (port, cable, drive: negotiated against possible), its volumes with filesystem traits, fill level and whether they mount at boot, and the facts the OS could not tell |
-| Benchmark | pick volumes and tests, live throughput chart, results side by side with link-bound/drive-bound labels |
-| Models | every item across stores: size, store, volume, estimated load time from each measured volume, duplicates |
-| Advice | the ranked advice with why, gain, risks and commands to copy |
-| History | past runs and a comparison of any two |
+| Overview | a headline (the most important finding and a button to act on it), a card per drive (how full, connection at full speed or not, measured speed and the load time of a 20 GB model, a "Test speed" button), the plan's steps and the biggest things on disk |
+| Plan | what was found (full, slow), then the advice as ordered steps: clean caches, prepare the external drive, move model folders, get full speed, find hidden space; each task with what it frees, a checkbox kept in the browser, and "How to do it" with the commands and their risks |
+| Space | a bar per drive with each store in its fixed colour, a table of the same, the biggest single things, and the two slow scans (hidden space, duplicates) as buttons with what they do |
+| Drives & speed | read and write speed compared across drives, then each drive's card with its filesystem and startup notes and its technical details |
+| Models | every model with its tool, size and drive, and its load time from each drive (estimated from the connection until the drive is tested, and labelled so) |
+| History | compare two scans, open an older one, download a report to share |
 
 Charts are inline SVG and HTML drawn by the page, in the dataviz reference palette for light and dark
 (decision D-016); every chart has a legend or a table. Store colours follow the store, never its size.

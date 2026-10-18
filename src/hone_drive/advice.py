@@ -15,6 +15,7 @@ from hone_drive.advice_stores import (
     a09_keep_fast,
 )
 from hone_drive.model import Advice, Gain, Run, Severity
+from hone_drive.presentation import drive_names, volume_names
 
 FULL = 0.85
 Rule = Callable[[Run, str], list[Advice]]
@@ -31,16 +32,17 @@ def a01_full_volumes(run: Run, home: str) -> list[Advice]:
         )
         biggest = ", ".join(f"{s.title} {text.size(s.bytes)}" for s in stores[:4]) or "no known stores"
         to_80 = int(volume.used_bytes - 0.8 * volume.total_bytes)
+        name = volume_names(run)[volume.mount]
         found.append(
             Advice(
                 rule="A01",
                 severity="warn",
-                title=f"{volume.mount} is {text.percent(volume.used_fraction)} full",
+                title=f"{name} is {text.percent(volume.used_fraction)} full",
                 why=[
-                    f"{text.size(volume.free_bytes)} free of {text.size(volume.total_bytes)}.",
-                    f"The biggest stores on it: {biggest}.",
-                    f"Freeing {text.size(to_80)} brings it under 80%; the advice below says what to move "
-                    "or clean.",
+                    f"Only {text.size(volume.free_bytes)} left of {text.size(volume.total_bytes)} "
+                    f"(mounted at {volume.mount}).",
+                    f"The biggest things on it: {biggest}.",
+                    f"Freeing {text.size(to_80)} brings it under 80%.",
                 ],
                 cites=[f"volume:{volume.mount}"],
                 gain=Gain(bytes_freed=to_80),
@@ -56,26 +58,32 @@ def a03_limited_links(run: Run, home: str) -> list[Advice]:
             continue
         mounts = [v.mount for v in run.volumes if v.drive_id == drive.id]
         reads = [m for m in run.measurements if m.volume in mounts and m.test in ("seq-read", "model-read")]
-        why = [f"{drive.model or drive.id} is linked at {links.describe(drive.link)}."]
+        link = drive.link
+        why = [
+            f"It's connected at {link.negotiated_gbps:g} Gbps, but this port can do "
+            f"{link.port_max_gbps:g} Gbps "
+            f"({links.describe(link)})."
+        ]
         if reads:
             why.append(
-                f"It reads at {text.speed(reads[0].gbs)}, which is what this link carries."
+                f"It reads at {text.speed(reads[0].gbs)}: the most this connection carries, so the "
+                "connection is what holds it back."
                 if reads[0].label == "link-bound"
                 else f"It reads at {text.speed(reads[0].gbs)}."
             )
         why += [
-            "Likely causes, most likely first: the cable (a 20 Gbps link needs a full-featured USB-C cable; "
-            "use the one that came with the drive), an adapter or hub in between, the port, the drive's own "
-            "mode.",
-            "After changing something, scan again: the link is renegotiated when the drive is plugged in.",
+            "Try these, in order: the cable that came with the drive (a 20 Gbps connection needs a "
+            "full-featured USB-C cable), plugging it in directly without a hub or adapter, another "
+            "USB-C port.",
+            "After each change, scan again to see the new connection speed.",
         ]
-        if "device_max_gbps" in drive.link.unknown:
-            why.append("The drive does not report its own maximum, so it may already be at its limit.")
+        if "device_max_gbps" in link.unknown:
+            why.append("The drive doesn't report its own top speed, so it may already be at its limit.")
         found.append(
             Advice(
                 rule="A03",
                 severity="suggest",
-                title=f"{drive.model or drive.id} could be faster on another cable or port",
+                title=f"{drive_names(run)[drive.id]} could be faster with another cable or port",
                 why=why,
                 cites=[f"drive:{drive.id}", *[m.id for m in reads]],
                 commands={
@@ -108,14 +116,13 @@ def a04_full_and_slow(run: Run, home: str) -> list[Advice]:
             Advice(
                 rule="A04",
                 severity="warn",
-                title=f"{volume.mount} writes slowly because it is nearly full",
+                title=f"{volume_names(run)[volume.mount]} writes slowly because it's almost full",
                 why=[
                     f"It writes at {text.speed(writes[0].gbs)}"
                     + (f" but reads at {text.speed(reference)}." if reads else "."),
-                    f"It is {text.percent(volume.used_fraction)} full. SSDs write through a fast cache "
-                    "sized from free space; with little free space left, writes slow down.",
-                    "Freeing space (advice A01) should bring the write speed back; keep at least 15 to 20% "
-                    "free.",
+                    "SSDs write through a fast cache that lives in free space; with little free space left, "
+                    "writes slow down.",
+                    "Freeing space should bring the write speed back. Keep at least 15 to 20% free.",
                 ],
                 cites=[writes[0].id, *[m.id for m in reads[:1]], f"volume:{volume.mount}"],
             )
@@ -132,9 +139,11 @@ def a10_unaccounted(run: Run, home: str) -> list[Advice]:
             Advice(
                 rule="A10",
                 severity="suggest",
-                title=f"{text.size(acc.unaccounted_bytes)} of {acc.volume} could not be seen",
+                title=f"{text.size(acc.unaccounted_bytes)} on "
+                f"{volume_names(run).get(acc.volume, acc.volume)} "
+                "is in folders only an administrator can read",
                 why=[
-                    "The walk could read less than the filesystem reports as used.",
+                    "The scan could read less than the drive reports as used.",
                     "It may be in: " + "; ".join(acc.hints) + ".",
                     *(
                         [f"Folders it could not read include {', '.join(acc.unreadable[:5])}."]
