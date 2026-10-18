@@ -1,0 +1,131 @@
+{
+ "commands": [
+  {
+   "args": [
+    "nvidia-smi",
+    "--query-gpu=name,memory.total",
+    "--format=csv,noheader,nounits"
+   ],
+   "code": 0,
+   "stdout": "NVIDIA GeForce RTX 4060 Laptop GPU, 8188\n"
+  }
+ ],
+ "dirs": {
+  "/dev/disk/by-label": [
+   "PNYRP60PSSD",
+   "endeavouros"
+  ],
+  "/dev/disk/by-uuid": [
+   "4300-2698",
+   "00000000-0000-0000-0000-000000000000",
+   "6A1F-0000"
+  ],
+  "/sys/block": [
+   "nvme0n1",
+   "sda"
+  ],
+  "/sys/class/drm": [
+   "card0",
+   "card0-DP-3",
+   "card0-HDMI-A-3",
+   "card0-eDP-2",
+   "card1",
+   "card1-DP-1",
+   "card1-DP-2",
+   "card1-HDMI-A-1",
+   "card1-HDMI-A-2",
+   "card1-eDP-1",
+   "renderD128",
+   "renderD129",
+   "version"
+  ]
+ },
+ "files": {
+  "/etc/os-release": "NAME=\"EndeavourOS\"\nPRETTY_NAME=\"EndeavourOS\"\nID=\"endeavouros\"\nID_LIKE=\"arch\"\nBUILD_ID=rolling\nANSI_COLOR=\"38;2;23;147;209\"\nHOME_URL=\"https://endeavouros.com\"\nDOCUMENTATION_URL=\"https://discovery.endeavouros.com\"\nSUPPORT_URL=\"https://forum.endeavouros.com\"\nBUG_REPORT_URL=\"https://forum.endeavouros.com/c/general-system/endeavouros-installation\"\nPRIVACY_POLICY_URL=\"https://endeavouros.com/privacy-policy-2\"\nLOGO=\"endeavouros\"\n",
+  "/proc/cpuinfo": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 183\nmodel name\t: Intel(R) Core(TM) i9-14900HX\nstepping\t: 1\nmicrocode\t: 0x137\ncpu MHz\t\t: 4462.592\ncache size\t: 36864 KB\nphysical id\t: 0\nsiblings\t: 32\ncore id\t\t: 0\ncpu cores\t: 24\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 32\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf tsc_known_freq pni pclmulqdq dtes64 monitor ds_cpl vmx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp ibrs_enhanced tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb intel_pt sha_ni xsaveopt xsavec xgetbv1 xsaves split_lock_detect user_shstk avx_vnni dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp hwp_pkg_req hfi vnmi umip pku ospke waitpkg gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize arch_lbr ibt flush_l1d arch_capabilities\nvmx flags\t: vnmi preemption_timer posted_intr invvpid ept_x_only ept_ad ept_1gb flexpriority apicv tsc_offset vtpr mtf vapic ept vpid unrestricted_guest vapic_reg vid ple shadow_vmcs ept_violation_ve ept_mode_based_exec tsc_scaling usr_wait_pause\nbugs\t\t: spectre_v1 spectre_v2 spec_store_bypass swapgs eibrs_pbrsb rfds bhi spectre_v2_user vmscape\nbogomips\t: 4840.00\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 39 bits physical, 48 bits virtual\npower management:\n",
+  "/proc/meminfo": "MemTotal:       32460304 kB\nMemFree:        13665016 kB\nMemAvailable:   25008036 kB\nBuffers:         3278488 kB\nCached:          6326092 kB\nSwapCached:       458132 kB\nActive:          3396592 kB\nInactive:        9982764 kB\nActive(anon):    2578400 kB\nInactive(anon):  2133128 kB\nActive(file):     818192 kB\nInactive(file):  7849636 kB\nUnevictable:      136888 kB\nMlocked:             100 kB\nSwapTotal:      33554428 kB\nSwapFree:       30692568 kB\nZswap:            471660 kB\nZswapped:        1834648 kB\nDirty:             32900 kB\nWriteback:           296 kB\nAnonPages:       3350464 kB\nMapped:           863912 kB\nShmem:           1115836 kB\nKReclaimable:    3170660 kB\nSlab:            3693260 kB\nSReclaimable:    3106712 kB\nSUnreclaim:       586548 kB\nKernelStack:       44560 kB\nPageTables:        77992 kB\nSecPageTables:      2100 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    49784580 kB\nCommitted_AS:   25112964 kB\nVmallocTotal:   34359738367 kB\nVmallocUsed:      233480 kB\nVmallocChunk:          0 kB\nPercpu:           111232 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:    546816 kB\nShmemHugePages:   321536 kB\nShmemPmdMapped:        0 kB\nFileHugePages:     88064 kB\nFilePmdMapped:     71680 kB\nCmaTotal:              0 kB\nCmaFree:               0 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      598368 kB\nDirectMap2M:    12640256 kB\nDirectMap1G:    19922944 kB\n",
+  "/proc/sys/kernel/osrelease": "6.18.57-1-lts\n",
+  "/sys/block/nvme0n1/device/model": "WD PC SN560 SDDPNQE-1T00-1102           \n",
+  "/sys/block/nvme0n1/device/serial": "SERIAL1        \n",
+  "/sys/block/nvme0n1/queue/rotational": "0\n",
+  "/sys/block/nvme0n1/removable": "0\n",
+  "/sys/block/nvme0n1/size": "2000409264\n",
+  "/sys/block/sda/device/model": "RP60 PSSD       \n",
+  "/sys/block/sda/device/vendor": "PNY     \n",
+  "/sys/block/sda/queue/rotational": "0\n",
+  "/sys/block/sda/removable": "0\n",
+  "/sys/block/sda/size": "2000409264\n",
+  "/sys/class/block/nvme0n1p1/partition": "1\n",
+  "/sys/class/block/nvme0n1p2/partition": "2\n",
+  "/sys/class/block/sda1/partition": "1\n",
+  "/sys/class/drm/card0/device/vendor": "0x10de\n",
+  "/sys/class/drm/card1/device/vendor": "0x8086\n",
+  "/sys/class/drm/renderD128/device/vendor": "0x8086\n",
+  "/sys/class/drm/renderD129/device/vendor": "0x10de\n",
+  "/sys/devices/pci0000:00/0000:00:0d.0/usb2/2-2/product": "PNY RP60 PSSD\n",
+  "/sys/devices/pci0000:00/0000:00:0d.0/usb2/2-2/rx_lanes": "1\n",
+  "/sys/devices/pci0000:00/0000:00:0d.0/usb2/2-2/serial": "SERIAL2\n",
+  "/sys/devices/pci0000:00/0000:00:0d.0/usb2/2-2/speed": "10000\n",
+  "/sys/devices/pci0000:00/0000:00:0d.0/usb2/2-2/tx_lanes": "1\n",
+  "/sys/devices/pci0000:00/0000:00:0d.0/usb2/2-2/version": " 3.20\n",
+  "/sys/devices/pci0000:00/0000:00:0d.0/usb2/rx_lanes": "2\n",
+  "/sys/devices/pci0000:00/0000:00:0d.0/usb2/speed": "20000\n",
+  "/sys/devices/pci0000:00/0000:00:0d.0/usb2/tx_lanes": "2\n",
+  "/sys/devices/pci0000:00/0000:00:1d.0/0000:6d:00.0/current_link_speed": "16.0 GT/s PCIe\n",
+  "/sys/devices/pci0000:00/0000:00:1d.0/0000:6d:00.0/current_link_width": "4\n",
+  "/sys/devices/pci0000:00/0000:00:1d.0/0000:6d:00.0/max_link_speed": "16.0 GT/s PCIe\n",
+  "/sys/devices/pci0000:00/0000:00:1d.0/0000:6d:00.0/max_link_width": "4\n"
+ },
+ "hostname": "host",
+ "links": {
+  "/dev/disk/by-label/PNYRP60PSSD": "/dev/sda1",
+  "/dev/disk/by-label/endeavouros": "/dev/nvme0n1p2",
+  "/dev/disk/by-uuid/00000000-0000-0000-0000-000000000000": "/dev/nvme0n1p2",
+  "/dev/disk/by-uuid/4300-2698": "/dev/nvme0n1p1",
+  "/dev/disk/by-uuid/6A1F-0000": "/dev/sda1",
+  "/sys/block/nvme0n1": "/sys/devices/pci0000:00/0000:00:1d.0/0000:6d:00.0/nvme/nvme0/nvme0n1",
+  "/sys/block/sda": "/sys/devices/pci0000:00/0000:00:0d.0/usb2/2-2/2-2:1.0/host0/target0:0:0/0:0:0:0/block/sda",
+  "/sys/class/block/nvme0n1p1": "/sys/devices/pci0000:00/0000:00:1d.0/0000:6d:00.0/nvme/nvme0/nvme0n1/nvme0n1p1",
+  "/sys/class/block/nvme0n1p2": "/sys/devices/pci0000:00/0000:00:1d.0/0000:6d:00.0/nvme/nvme0/nvme0n1/nvme0n1p2",
+  "/sys/class/block/sda1": "/sys/devices/pci0000:00/0000:00:0d.0/usb2/2-2/2-2:1.0/host0/target0:0:0/0:0:0:0/block/sda/sda1"
+ },
+ "note": "Recorded on the reference laptop of design/history/0000 on 2026-10-18 with `python -m hone_drive.testing`. The USB drive (sda) was unplugged at recording time; its sysfs answers were entered by hand from the values read that day (history \u00a75: a PNY RP60 linked at 10 Gbps, one lane, on a 20 Gbps two-lane port). Re-record with the drive plugged in to replace them.",
+ "os": "linux",
+ "partitions": [
+  [
+   "/dev/nvme0n1p2",
+   "/",
+   "ext4",
+   "rw,noatime"
+  ],
+  [
+   "/dev/nvme0n1p1",
+   "/efi",
+   "vfat",
+   "rw,relatime,fmask=0137,dmask=0027,codepage=437,iocharset=ascii,shortname=mixed,utf8,errors=remount-ro"
+  ],
+  [
+   "/dev/sda1",
+   "/run/media/user/PNYRP60PSSD",
+   "exfat",
+   "rw,nosuid,nodev,relatime,uid=1000,gid=1000"
+  ]
+ ],
+ "usage": {
+  "/": [
+   1004864958464,
+   891321483264,
+   62423703552
+  ],
+  "/efi": [
+   2143281152,
+   631324672,
+   1511956480
+  ],
+  "/run/media/user/PNYRP60PSSD": [
+   1024208404480,
+   2293760,
+   1024206110720
+  ]
+ }
+}

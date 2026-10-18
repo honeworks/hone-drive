@@ -6,4 +6,13 @@ design changed is in [`design/changes/`](design/changes/).
 
 ## [Unreleased]
 
+### Added
+
+- Milestone M1 of [0001](design/changes/0001-initial-design.md), the scan: the data model; the `Probe`
+  port with Linux (sysfs), macOS (`diskutil`, `system_profiler`) and Windows (PowerShell storage
+  cmdlets) probes; links as negotiated against possible; filesystem traits; store finders for Ollama
+  (files, or its server when the folder is not readable, D-010), Hugging Face, ComfyUI (with
+  `extra_model_paths.yaml`), LM Studio, llama.cpp, Docker and package caches; unaccounted space with its
+  likely hiding places (D-011); byte-identical duplicates; runs on disk; `hone-drive scan`, `runs`,
+  `show`; recorded machines for the tests (D-012).
 - Repository created with the proposed design ([0001](design/changes/0001-initial-design.md)).

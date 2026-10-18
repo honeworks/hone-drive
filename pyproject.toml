@@ -25,9 +25,9 @@ classifiers = [
     "Topic :: System :: Hardware",
     "Typing :: Typed",
 ]
-# The design (design/changes/0001) adds psutil as a core dependency in milestone 1 (design/decisions.md
-# D-001); the CLI uses argparse, so there is no `cli` extra (D-002).
-dependencies = ["pydantic>=2.7"]
+# psutil lists volumes the same way on Linux, macOS and Windows (design/decisions.md D-001); the CLI uses
+# argparse, so there is no `cli` extra (D-002).
+dependencies = ["psutil>=5.9", "pydantic>=2.7"]
 
 [dependency-groups]
 # Development tools (PEP 735): installed by `uv sync`, never published as an extra.
@@ -41,6 +41,9 @@ Homepage = "https://github.com/honeworks/hone-drive"
 Repository = "https://github.com/honeworks/hone-drive"
 Issues = "https://github.com/honeworks/hone-drive/issues"
 Changelog = "https://github.com/honeworks/hone-drive/blob/main/CHANGELOG.md"
+
+[project.scripts]
+hone-drive = "hone_drive.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.25"]
@@ -66,13 +69,15 @@ extend-exclude = ["design"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PT", "N", "S", "C4", "DTZ", "PL", "C90"]
-ignore = ["PLR0913", "PLR2004"]
+ignore = ["PLR0913", "PLR0917", "PLR2004"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "S108", "S603", "PT018", "E501", "PLC0415"]
+"src/hone_drive/testing.py" = ["S101", "PT018"]  # the contract checker asserts by design (design §12)
+"src/hone_drive/errors.py" = ["N818"]  # NotFound, UnsafeBenchmark ... are the public names
 
 [tool.pyright]
 include = ["src", "tests"]

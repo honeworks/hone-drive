@@ -1,0 +1,147 @@
+{
+ "commands": [
+  {
+   "args": [
+    "sw_vers",
+    "-productVersion"
+   ],
+   "code": 0,
+   "stdout": "15.1\n"
+  },
+  {
+   "args": [
+    "sysctl",
+    "-n",
+    "machdep.cpu.brand_string"
+   ],
+   "code": 0,
+   "stdout": "Apple M3 Pro\n"
+  },
+  {
+   "args": [
+    "sysctl",
+    "-n",
+    "hw.memsize"
+   ],
+   "code": 0,
+   "stdout": "38654705664\n"
+  },
+  {
+   "args": [
+    "system_profiler",
+    "SPDisplaysDataType",
+    "-json"
+   ],
+   "code": 0,
+   "stdout": "{\"SPDisplaysDataType\": [{\"_name\": \"Apple M3 Pro\", \"sppci_model\": \"Apple M3 Pro\", \"sppci_cores\": \"18\"}]}"
+  },
+  {
+   "args": [
+    "diskutil",
+    "list",
+    "-plist",
+    "physical"
+   ],
+   "code": 0,
+   "stdout": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>AllDisks</key>\n\t<array>\n\t\t<string>disk0</string>\n\t\t<string>disk0s1</string>\n\t\t<string>disk0s2</string>\n\t\t<string>disk4</string>\n\t\t<string>disk4s1</string>\n\t</array>\n\t<key>WholeDisks</key>\n\t<array>\n\t\t<string>disk0</string>\n\t\t<string>disk4</string>\n\t</array>\n</dict>\n</plist>\n"
+  },
+  {
+   "args": [
+    "diskutil",
+    "info",
+    "-plist",
+    "disk0"
+   ],
+   "code": 0,
+   "stdout": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>BusProtocol</key>\n\t<string>Apple Fabric</string>\n\t<key>DeviceIdentifier</key>\n\t<string>disk0</string>\n\t<key>Internal</key>\n\t<true/>\n\t<key>MediaName</key>\n\t<string>APPLE SSD AP1024Z</string>\n\t<key>RemovableMedia</key>\n\t<false/>\n\t<key>SolidState</key>\n\t<true/>\n\t<key>TotalSize</key>\n\t<integer>1000555581440</integer>\n</dict>\n</plist>\n"
+  },
+  {
+   "args": [
+    "diskutil",
+    "info",
+    "-plist",
+    "disk4"
+   ],
+   "code": 0,
+   "stdout": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>BusProtocol</key>\n\t<string>USB</string>\n\t<key>DeviceIdentifier</key>\n\t<string>disk4</string>\n\t<key>Internal</key>\n\t<false/>\n\t<key>MediaName</key>\n\t<string>PNY RP60 PSSD</string>\n\t<key>RemovableMedia</key>\n\t<false/>\n\t<key>SolidState</key>\n\t<true/>\n\t<key>TotalSize</key>\n\t<integer>1024209543168</integer>\n</dict>\n</plist>\n"
+  },
+  {
+   "args": [
+    "system_profiler",
+    "SPUSBHostDataType",
+    "-json"
+   ],
+   "code": 0,
+   "stdout": "{\"SPUSBHostDataType\": [{\"_name\": \"USB31Bus\", \"_items\": [{\"_name\": \"PNY RP60 PSSD\", \"USBDeviceKeyLinkSpeed\": \"10 Gb/s\", \"USBDeviceKeyVendorName\": \"PNY\", \"Media\": [{\"_name\": \"PNY RP60 PSSD\", \"bsd_name\": \"disk4\", \"size_in_bytes\": 1024209543168}]}]}]}"
+  },
+  {
+   "args": [
+    "system_profiler",
+    "SPNVMeDataType",
+    "-json"
+   ],
+   "code": 0,
+   "stdout": "{\"SPNVMeDataType\": []}"
+  },
+  {
+   "args": [
+    "diskutil",
+    "info",
+    "-plist",
+    "/dev/disk3s1s1"
+   ],
+   "code": 0,
+   "stdout": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>APFSPhysicalStores</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>APFSPhysicalStore</key>\n\t\t\t<string>disk0s2</string>\n\t\t</dict>\n\t</array>\n\t<key>ParentWholeDisk</key>\n\t<string>disk3</string>\n\t<key>VolumeName</key>\n\t<string>Macintosh HD</string>\n\t<key>VolumeUUID</key>\n\t<string>11111111-2222-3333-4444-555555555555</string>\n</dict>\n</plist>\n"
+  },
+  {
+   "args": [
+    "diskutil",
+    "info",
+    "-plist",
+    "/dev/disk4s1"
+   ],
+   "code": 0,
+   "stdout": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>ParentWholeDisk</key>\n\t<string>disk4</string>\n\t<key>VolumeName</key>\n\t<string>PNYRP60PSSD</string>\n\t<key>VolumeUUID</key>\n\t<string>66666666-7777-8888-9999-000000000000</string>\n</dict>\n</plist>\n"
+  }
+ ],
+ "hostname": "host",
+ "note": "Written by hand from the documented output of diskutil and system_profiler, not recorded on a real machine: an Apple silicon Mac with its internal SSD and a USB SSD at 10 Gbps. Replace with a recording (`python -m hone_drive.testing`) from a real Mac.",
+ "os": "macos",
+ "partitions": [
+  [
+   "/dev/disk3s1s1",
+   "/",
+   "apfs",
+   "ro,local,rootfs,dovolfs,journaled,multilabel"
+  ],
+  [
+   "/dev/disk3s5",
+   "/System/Volumes/Data",
+   "apfs",
+   "rw,local,dovolfs,dontbrowse,journaled,multilabel"
+  ],
+  [
+   "/dev/disk4s1",
+   "/Volumes/PNYRP60PSSD",
+   "exfat",
+   "rw,nodev,nosuid,local,ignore-ownership"
+  ]
+ ],
+ "usage": {
+  "/": [
+   994662584320,
+   612301258752,
+   382361325568
+  ],
+  "/System/Volumes/Data": [
+   994662584320,
+   612301258752,
+   382361325568
+  ],
+  "/Volumes/PNYRP60PSSD": [
+   1024208404480,
+   2293760,
+   1024206110720
+  ]
+ }
+}

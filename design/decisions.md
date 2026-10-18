@@ -78,3 +78,35 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
 - **Choice:** the repository is created locally; it goes to `github.com/honeworks/hone-drive` and PyPI only
   when the owner asks.
 - **Status:** follows the workspace rules.
+
+## D-010: Ollama's service folder is sized through its server  (2026-10-18)
+
+- **Question:** on Linux the Ollama service keeps its models in its own user's folder
+  (`/usr/share/ollama`), which the user can't read (history §1); hone-drive never runs as root.
+- **Choice:** when an Ollama folder is behind an unreadable folder, ask the local server
+  (`OLLAMA_HOST`, default `127.0.0.1:11434`) for `/api/tags`: names, sizes and manifest digests. Names
+  with one digest are one item. The store is marked `source: "ollama api"`, its path is the unreadable
+  folder, and the volume accounting subtracts it as explained (design §5.4).
+- **Why:** it is the only way to see the biggest store on the reference machine without root; the request
+  goes to localhost only. Two models that share a weights blob but have different manifests are counted
+  twice through the API (rare: only for copies of one model with a different template).
+- **Status:** follows the design (0001).
+
+## D-011: the volume walk runs only when asked  (2026-10-18)
+
+- **Choice:** `scan()` finds drives, volumes and stores in seconds; the walk that measures unaccounted
+  space (design §5.4) runs with `accounting=True` (`scan --account`, the dashboard's button).
+- **Why:** on the reference machine the walk of an 830 GB volume took 2.5 minutes cold; the goal of
+  design §1 is a scan that finishes in seconds.
+- **Status:** follows the design (0001).
+
+## D-012: probes take a runner and a file reader; fixtures replay real machines  (2026-10-18)
+
+- **Choice:** each probe gets a `Runner` (commands) and, on Linux, a `Files` reader (sysfs, /proc) as
+  arguments. `hone_drive.testing.RecordedSystem` answers both from a JSON fixture, and `record()` writes
+  one from the machine it runs on, with serials, UUIDs, the host and user names replaced.
+- **Why:** a Linux probe can then be tested on macOS and Windows CI and the other way round; a
+  contributor with a new machine adds a fixture with one command. The Linux fixture is recorded on the
+  reference machine; its USB drive part and the macOS and Windows fixtures were written by hand from
+  documented formats (their `note` says so) until recordings from real machines replace them.
+- **Status:** follows the design (0001).
