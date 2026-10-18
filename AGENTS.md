@@ -13,7 +13,8 @@ Python API share one data model. Read [design/current.md](design/current.md) bef
 its §15 lists the guarantees the tests check. Why the design looks like this:
 [design/changes/](design/changes/) and [design/decisions.md](design/decisions.md).
 
-**Status:** the design (0001) is `accepted` and being built in milestones M1–M4.
+**Status:** the design (0001) is `accepted`; milestones M1 to M4 are built. The macOS and Windows
+probes still need recordings from real machines (design/decisions.md D-012).
 
 ## Commands
 
