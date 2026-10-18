@@ -60,10 +60,11 @@ def open_file(path: str, write: bool) -> Opened:
 
 def drop_cache(opened: Opened) -> None:
     """After a fallback write, ask the OS to forget the file's pages so a read comes from the drive."""
-    if opened.cache == "fallback" and hasattr(os, "posix_fadvise"):
+    fadvise: Any = getattr(os, "posix_fadvise", None)  # Linux only; absent on macOS and Windows
+    if opened.cache == "fallback" and fadvise is not None:
         fd = opened.file.fileno()
         os.fsync(fd)
-        os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+        fadvise(fd, 0, 0, getattr(os, "POSIX_FADV_DONTNEED", 4))
 
 
 def _wrap(fd: int, write: bool) -> io.FileIO:
