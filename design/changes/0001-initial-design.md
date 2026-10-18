@@ -2,8 +2,8 @@
 
 ## Status
 
-`proposed` 2026-10-18. Awaiting the owner's review. Nothing is implemented until it is `accepted`. The
-open questions are listed in [decisions.md](../decisions.md#awaiting-owner-review).
+`accepted 2026-10-18 by the owner ("accepted")`. Proposed the same day; the open questions in
+[decisions.md](../decisions.md) were accepted with their proposed options.
 
 ## Context
 
@@ -64,8 +64,7 @@ Option 3, as described in [design/current.md](../current.md):
 - a dashboard served locally by the standard library, offline, as in Hone Frame (§10);
 - tests against recorded probe outputs from real machines, and CI on all three systems (§14).
 
-The name is **hone-drive** (import `hone_drive`, command `hone-drive`), pending the owner's choice
-(decision D-003). Local git only until the owner says to publish.
+The name is **hone-drive** (import `hone_drive`, command `hone-drive`; decision D-003). Local git only until the owner says to publish.
 
 ### Milestones
 

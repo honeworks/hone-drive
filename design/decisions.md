@@ -7,12 +7,10 @@ refer to them by number. Entries marked **awaiting owner review** are proposals 
 
 | Entry | Question for the owner |
 |---|---|
-| [D-001](#d-001-psutil-is-a-core-dependency--2026-10-18) | psutil (BSD-3) as a core dependency for volumes and usage on all three systems? |
-| [D-003](#d-003-the-name-hone-drive--2026-10-18) | The name `hone-drive` (alternatives: `hone-disk`, `hone-storage`)? |
-| [D-005](#d-005-the-dashboard-is-a-standard-library-server-and-a-static-page--2026-10-18) | A standard-library server and a hand-written static page, as in Hone Frame, rather than a web framework or a desktop app? |
-| [D-006](#d-006-full-benchmarks-under-the-machine-wide-lock--2026-10-18) | Full-size benchmarks outside the default suite and CI, run through `scripts/gpu-lock.sh`? |
-| [D-007](#d-007-advice-only-no-actions-in-01--2026-10-18) | Advice with commands to copy, never run, in 0.1; applying advice later as its own change? |
-| [D-008](#d-008-distribution-through-pypi--2026-10-18) | Distributed through PyPI (`uvx hone-drive`, `pipx install hone-drive`), no standalone binaries in 0.1? |
+| (none) | |
+
+On 2026-10-18 the owner accepted design 0001 ("accepted"), and with it every open question with its
+proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
 
 ## D-001: psutil is a core dependency  (2026-10-18)
 
@@ -21,7 +19,7 @@ refer to them by number. Entries marked **awaiting owner review** are proposals 
   Drive and link details still come from each OS's own tools (design §3.2).
 - **Why:** the standard library has `shutil.disk_usage` but no portable list of mounted volumes; writing
   one per OS duplicates a mature, widely installed package.
-- **Status:** awaiting owner review.
+- **Status:** accepted 2026-10-18 by the owner ("accepted").
 
 ## D-002: the command line uses argparse  (2026-10-18)
 
@@ -35,7 +33,7 @@ refer to them by number. Entries marked **awaiting owner review** are proposals 
 - **Choice:** `hone-drive`, import `hone_drive`, command `hone-drive`, variables `HONE_DRIVE_*`.
 - **Why:** short, says what it is about, reads well as a command; "disk" suggests internal drives only and
   "storage" suggests cloud storage.
-- **Status:** awaiting owner review.
+- **Status:** accepted 2026-10-18 by the owner ("accepted").
 
 ## D-004: an expected-speed table per link  (2026-10-18)
 
@@ -51,7 +49,7 @@ refer to them by number. Entries marked **awaiting owner review** are proposals 
   JavaScript shipped in the package with inline SVG charts; the host and token checks of Hone Frame.
 - **Why:** no build step, no extra dependency, no network; it starts in under a second from `uvx` and is
   the pattern the family already maintains.
-- **Status:** awaiting owner review.
+- **Status:** accepted 2026-10-18 by the owner ("accepted").
 
 ## D-006: full benchmarks under the machine-wide lock  (2026-10-18)
 
@@ -59,21 +57,21 @@ refer to them by number. Entries marked **awaiting owner review** are proposals 
   runs only through `scripts/gpu-lock.sh`. The default suite runs a 64 MiB benchmark for shape only.
 - **Why:** writing gigabytes disturbs another project's model run on the same machine, and its timings are
   disturbed in turn; CI runners' disks say nothing about users' drives.
-- **Status:** awaiting owner review.
+- **Status:** accepted 2026-10-18 by the owner ("accepted").
 
 ## D-007: advice only, no actions in 0.1  (2026-10-18)
 
 - **Choice:** advice shows commands per OS with a copy button and never runs them.
 - **Why:** moving hundreds of gigabytes of models, changing service settings and reformatting drives can
   lose data; doing it safely (checks, resumable copies, rollback) deserves its own design.
-- **Status:** awaiting owner review.
+- **Status:** accepted 2026-10-18 by the owner ("accepted").
 
 ## D-008: distribution through PyPI  (2026-10-18)
 
 - **Choice:** a pure-Python wheel on PyPI, started with `uvx hone-drive` or `pipx install hone-drive`.
 - **Why:** AI developers have Python and uv already; one wheel serves all three systems. Standalone
   binaries (PyInstaller) can follow if people without Python ask for them.
-- **Status:** awaiting owner review.
+- **Status:** accepted 2026-10-18 by the owner ("accepted").
 
 ## D-009: local git only until the owner says to publish  (2026-10-18)
 
