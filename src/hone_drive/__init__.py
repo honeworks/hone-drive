@@ -1,4 +1,4 @@
-"""hone-drive: a storage dashboard for AI developers (design/current.md; status: proposed, change 0001)."""
+"""hone-drive: a storage dashboard for AI developers (design/current.md; accepted in change 0001)."""
 
 __all__ = ["__version__"]
 

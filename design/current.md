@@ -1,6 +1,6 @@
 # hone-drive: the design (0.1)
 
-**Status:** proposed in [changes/0001](changes/0001-initial-design.md) on 2026-10-18; nothing is built.
+**Status:** accepted in [changes/0001](changes/0001-initial-design.md) on 2026-10-18; being built (milestones M1–M4).
 Section numbers are stable; code comments will refer to them ("design §6.2"). The evidence behind the
 defaults is in [history/0000-research.md](history/0000-research.md); smaller choices and the open
 questions are in [decisions.md](decisions.md).

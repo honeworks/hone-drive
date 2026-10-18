@@ -3,7 +3,7 @@
 Thank you for helping. This page covers how to set up, the rules the code follows, how it is tested and
 how the design changes. The design itself is in [`design/`](design/README.md); start with
 [`design/current.md`](design/current.md). The first design, [0001](design/changes/0001-initial-design.md),
-is proposed and not built yet.
+is accepted and being built.
 
 ## Setup and the quality gates
 

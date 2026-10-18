@@ -10,8 +10,8 @@ system. Linux, macOS and Windows; works offline; needs no administrator rights.
 Part of **[honeworks](https://github.com/honeworks)**: small, standalone tools for reliable generative-AI
 workflows.
 
-> **Status: design proposed, nothing built yet.** The design is in [design/current.md](design/current.md)
-> and the proposal to accept is [design/changes/0001](design/changes/0001-initial-design.md).
+> **Status: in development.** The design is in [design/current.md](design/current.md), accepted in
+> [design/changes/0001](design/changes/0001-initial-design.md).
 
 ## What it does (the plan)
 
