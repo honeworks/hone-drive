@@ -6,6 +6,16 @@ design changed is in [`design/changes/`](design/changes/).
 
 ## [Unreleased]
 
+### Added
+
+- The model shelf ([0003](design/changes/0003-model-shelf.md)): move models to a drive and bring them back,
+  from the Models screen, `hone-drive shelf` and `hone_drive.shelf`. Every copy is read back past the page
+  cache and compared by SHA-256 before anything is removed; repeated moves trust the drive's catalog;
+  models in use, a drive without room or a FAT32 drive are refused; bringing back never touches the
+  drive; removing the only copy from a drive needs a yes; `shelf check` shows the command that gives
+  this user access to a tool's folder on this system (Ollama's service folder on Linux). Works with
+  Ollama, ComfyUI, Hugging Face, LM Studio, llama.cpp and your own folders. Guarantees AC17 to AC26.
+
 ### Changed
 
 - The code and the docs agree again (an audit on 2026-11-05). Behaviour restored to match the design:

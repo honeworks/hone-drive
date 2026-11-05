@@ -2,7 +2,8 @@
 
 ## Status
 
-`accepted 2026-11-05 by the owner ("accepted")`. Proposed the same day. Asked for by the owner the same day ("I want it to move models to the drive. Copy,
+`accepted 2026-11-05 by the owner ("accepted")`, and implemented the same day (unreleased; the next
+version after 0.0.1). Proposed the same day. Asked for by the owner the same day ("I want it to move models to the drive. Copy,
 make sure the model is copied ok, delete from machine. Then I want to be able to select I want this model,
 and it should copy it back"), with the answers recorded below; the open questions of the first draft were
 answered the same day (see "The owner's answers to the first draft").

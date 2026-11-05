@@ -323,7 +323,7 @@ function models(state) {
   } }));
   redraw();
   const unmeasured = m.columns.filter((c) => !c.measured);
-  return [pageTitle("Models", "Every model on this computer, and how long it takes to load from each drive. Loading is the only thing a slower drive changes: once loaded, a model runs just as fast."),
+  return [pageTitle("Models", "Every model on this computer and on your drives' shelves, and how long it takes to load from each drive. Loading is the only thing a slower drive changes: once loaded, a model runs just as fast."),
     unmeasured.length ? el("div", { class: "note", text: `Times for ${unmeasured.map((c) => c.name).join(" and ")} are estimates from the connection. Test their speed on the Drives screen for real numbers.` }) : null,
     el("div", { id: "shelf-panel" }),
     card(bar, el("div", { class: "filters" }, search, el("div", { class: "row" }, ...pills), el("span", { class: "spacer" }), count),

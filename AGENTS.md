@@ -8,12 +8,14 @@ People follow the same rules; they are in [CONTRIBUTING.md](CONTRIBUTING.md).
 `hone-drive` (import `hone_drive`) is a storage dashboard for AI developers, on Linux, macOS and Windows.
 It finds the machine's drives and how each is linked, sizes the model stores and caches that fill them,
 benchmarks drives with the page cache bypassed, turns the results into load times for the user's own
-models, and gives advice with commands it shows but never runs. A local dashboard, a command line and a
-Python API share one data model. Read [design/current.md](design/current.md) before changing behaviour;
+models, gives advice with commands it shows but never runs, and, when the user asks, moves models to a
+drive and back with every copy proven (the shelf). A local dashboard, a command line and a Python API share
+one data model. Read [design/current.md](design/current.md) before changing behaviour;
 its §15 lists the guarantees the tests check. Why the design looks like this:
 [design/changes/](design/changes/) and [design/decisions.md](design/decisions.md).
 
-**Status:** the design (0001) is `accepted`; milestones M1 to M4 are built. The macOS and Windows
+**Status:** the design (0001) is `accepted`; milestones M1 to M4 are built; the model shelf (0003) is
+built. The macOS and Windows
 probes still need recordings from real machines (design/decisions.md D-012).
 
 ## Commands
@@ -23,6 +25,7 @@ uv sync --all-extras                 # install everything (dev included)
 scripts/check.sh                     # all quality gates: lint, format, types, tests + coverage, build, wheel smoke test
 uv run pytest                        # default suite (fast, offline, deterministic)
 scripts/gpu-lock.sh uv run pytest -m bench   # full-size benchmarks on real drives, under the lock (none written yet)
+scripts/gpu-lock.sh uv run pytest -m real    # the shelf with a private, real Ollama (pulls a small model)
 ```
 
 ## Layout
@@ -43,8 +46,13 @@ src/hone_drive/
   compare.py  report.py                      run comparison, reports to share
   presentation.py  views.py                  plain-language names, verdicts and the plan the dashboard shows
   dashboard.py  jobs.py  dashboard_page/     the local server, its one background job, the page
-                                             (index.html, app.css, ui.js, app.js, screens.js; no build step)
-  runs.py                runs on disk;  text.py: sizes and speeds for people;  cli.py: the command line
+                                             (index.html, app.css, ui.js, app.js, screens.js, shelf.js; no build step)
+  shelf.py               the model shelf's public API (design §17): shelf_move.py (plan, move),
+                         shelf_restore.py (restore, remove, verify, contents), shelf_models.py (a model
+                         per tool, in use, leaving the computer), shelf_catalog.py (the catalog on the
+                         drive), shelf_copy.py (copy and prove), access.py (the check and its fix per OS)
+  runs.py                runs on disk;  text.py: sizes and speeds for people
+  cli.py  cli_shelf.py   the command line;  `hone-drive shelf ...`
   testing.py             FakeProbe, recorded machines, record(), check_probe()
 tests/unit|contract|integration|e2e   tests/fixtures/<os>/<machine>.json: recorded or hand-written machines
 ```
@@ -55,10 +63,12 @@ tests/unit|contract|integration|e2e   tests/fixtures/<os>/<machine>.json: record
    guarantees; complexity ≤ 10, functions ~40 lines, modules ~300 lines.
 2. **Design before code:** a new need or change starts as `design/changes/NNNN-<name>.md` with status
    `proposed`; the maintainer accepts it before it is built. Small choices go into `design/decisions.md`.
-3. **Read-only, no administrator rights:** probes run only read-only commands and files, each with a
-   timeout; nothing runs as administrator; nothing is moved, deleted or formatted. The only file written
-   outside the data folder is the benchmark's temporary file, removed on every path (design §6.3).
-4. **OS specifics stay in the probes and the direct-I/O module:** everything else works on the data model
+3. **Read-only unless the user acts, never administrator:** probes run only read-only commands and
+   files, each with a timeout; nothing runs as administrator; nothing is formatted or mounted. Outside the
+   data folder hone-drive writes only the benchmark's temporary file, removed on every path (design
+   §6.3), and, when the user moves, brings back or removes models, the model files and the shelf's
+   catalog, never removing a file before its copy is proven (design §17).
+4. **OS specifics stay in the probes, the direct-I/O module and `access.py`:** everything else works on the data model
    and runs the same on Linux, macOS and Windows (design §3); outside them the OS's name only picks a
    path, a hint or a command to show.
 5. **Unknown is `None` with a reason:** never guess, never show zero for a fact an OS can't provide
@@ -71,7 +81,8 @@ tests/unit|contract|integration|e2e   tests/fixtures/<os>/<machine>.json: record
 8. **Privacy:** reports remove serials, UUIDs, user and host names unless asked to keep them; nothing
    leaves the machine (design §13).
 9. **The default suite is offline, fast and deterministic** and asserts no speeds; full benchmarks
-   (`-m bench`) run only through `scripts/gpu-lock.sh`.
+   (`-m bench`) and the real-tool tests (`-m real`) run only through `scripts/gpu-lock.sh`. A test never
+   talks to the user's own Ollama: shelf tests use `tests/shelf_machine.py`'s fakes.
 10. **Git**: Conventional Commits, small commits; AI-written commits end with a `Co-Authored-By:` line.
     Push a branch and open a pull request only when the user asks ("push", "ship it"). Inside that pull
     request's flow, reviewing it on GitHub and pushing fixes the user asked for need no new request.

@@ -1,7 +1,7 @@
 [project]
 name = "hone-drive"
 dynamic = ["version"]
-description = "A storage dashboard for AI developers: drives and their links, model stores and caches, cache-bypassing benchmarks, model load times per drive, and advice with commands, on Linux, macOS and Windows."
+description = "A storage dashboard for AI developers: drives and their links, model stores and caches, cache-bypassing benchmarks, model load times per drive, advice with commands, and models moved to a drive and back with every copy checked, on Linux, macOS and Windows."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"

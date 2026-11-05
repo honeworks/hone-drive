@@ -64,7 +64,8 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
 - **Choice:** advice shows commands per OS with a copy button and never runs them.
 - **Why:** moving hundreds of gigabytes of models, changing service settings and reformatting drives can
   lose data; doing it safely (checks, resumable copies, rollback) deserves its own design.
-- **Status:** accepted 2026-10-18 by the owner ("accepted").
+- **Status:** accepted 2026-10-18 by the owner ("accepted"). For models, superseded by change 0003 (the
+  shelf): hone-drive moves models when the user asks; advice still only shows commands.
 
 ## D-008: distribution through PyPI  (2026-10-18)
 
@@ -210,4 +211,15 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   named exceptions grows silently; a made-up command for "do nothing" helps no one.
 - **Status:** the owner left it to the implementer on 2026-11-05 ("you decide what's best for an open
   source project").
+
+## D-022: how the shelf is built  (2026-11-05)
+
+- **Choice:** change 0003 named three modules; the shelf has six, each under the ~300-line guide:
+  `shelf.py` (the public API), `shelf_move.py`, `shelf_restore.py`, `shelf_models.py`, `shelf_catalog.py`,
+  `shelf_copy.py`, plus `access.py` and `cli_shelf.py`. The record's optional `Item.on_drive` was not
+  needed: the views read the shelves directly, so the run's format is unchanged. The benchmark's lock
+  became `bench_safety.lock_file`, holding "<host> <pid>", so a lock on a drive tells another computer's
+  hold from a process that is gone.
+- **Why:** one module per job keeps each readable; no change to the stored run means nothing to migrate.
+- **Status:** follows change 0003.
 

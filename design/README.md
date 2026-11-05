@@ -62,7 +62,7 @@ results with other people's (a later change could add an opt-in shared results f
 | [`current.md`](current.md) | the design as it stands today: concepts, rules and the guarantees the tests check |
 | [`changes/0001-initial-design.md`](changes/0001-initial-design.md) | the first design, from the owner's brief (accepted) |
 | [`changes/0002-a-dashboard-people-understand.md`](changes/0002-a-dashboard-people-understand.md) | the dashboard rebuilt around the user's questions, in plain words |
-| [`changes/0003-model-shelf.md`](changes/0003-model-shelf.md) | the model shelf: move models to a drive, check them, bring them back (accepted) |
+| [`changes/0003-model-shelf.md`](changes/0003-model-shelf.md) | the model shelf: move models to a drive, check them, bring them back (implemented) |
 | [`history/0000-research.md`](history/0000-research.md) | the session that started it: what was measured, what went wrong, what was learned |
 | [`decisions.md`](decisions.md) | smaller choices, with the open questions for the owner |
 

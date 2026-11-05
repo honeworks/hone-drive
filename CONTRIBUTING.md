@@ -115,7 +115,13 @@ entry points, event buses and dependency-injection containers.
 
 ### Benchmark tests and `scripts/gpu-lock.sh`
 
-hone-drive calls no AI model, so it has no real-model tests. Its heavy tests are full-size benchmarks
+The shelf has real-tool tests (`-m real`, in `tests/real/`): they start a private `ollama serve` on its
+own port and folder, pull a small model from the network, move it to a folder and back, and load it. They
+skip unless run through `scripts/gpu-lock.sh`, never touch the user's own Ollama, and remove everything
+they made. Every other shelf test uses the fakes in `tests/shelf_machine.py`, so no test can ask a real
+Ollama to delete a model.
+
+The other heavy tests are full-size benchmarks
 (`-m bench`, in `tests/bench/`): they write and read gigabytes on real drives. They run only through
 `scripts/gpu-lock.sh`, the machine-wide lock every honeworks project uses (`$HONE_GPU_LOCK`, default
 `/tmp/honeworks-gpu.lock`): a 4 GiB write disturbs another project's model run on the same machine, and is
