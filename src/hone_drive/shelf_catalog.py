@@ -12,11 +12,12 @@ import tempfile
 import uuid
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from hone_drive.bench_safety import lock_file
-from hone_drive.errors import ShelfBusy, UnsupportedFormat
+from hone_drive.errors import ShelfBusy, ShelfDamaged, UnsupportedFormat
 from hone_drive.model import CacheBypass
 from hone_drive.runs import data_home
 
@@ -89,7 +90,11 @@ def drive_id(mount: str, create: bool = False) -> str | None:
 
 
 def load(mount: str) -> Shelf | None:
-    return _read(folder(mount) / "shelf.json")
+    """The drive's shelf, with `mount` as where it is now (it may have been mounted elsewhere before)."""
+    shelf = _read(folder(mount) / "shelf.json")
+    if shelf is not None:
+        shelf.mount = mount
+    return shelf
 
 
 def open_shelf(mount: str, name: str) -> Shelf:
@@ -126,13 +131,22 @@ def locked(mount: str) -> Generator[None]:
 
 
 def _read(path: Path) -> Shelf | None:
+    """None only when there is no catalog: a catalog that can't be read is an error, never "empty", so
+    it is not written over and the copies it lists are not lost."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except FileNotFoundError:
         return None
-    if int(data.get("format", 0)) > FORMAT:
+    except (OSError, ValueError) as exc:
+        raise ShelfDamaged(f"can't read the shelf's catalog {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise ShelfDamaged(f"the shelf's catalog {path} is not a catalog")
+    if int(cast(dict[str, Any], data).get("format", 0)) > FORMAT:
         raise UnsupportedFormat(f"{path} was written by a newer hone-drive; upgrade to read it")
-    return Shelf.model_validate(data)
+    try:
+        return Shelf.model_validate(data)
+    except ValidationError as exc:
+        raise ShelfDamaged(f"the shelf's catalog {path} is damaged: {exc.errors()[0]['msg']}") from exc
 
 
 def _write(path: Path, text: str) -> None:

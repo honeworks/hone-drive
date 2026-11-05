@@ -36,6 +36,9 @@ class FakeOllama:
     comfyui_running: bool = False
     running: bool = False
     models: Path | None = None
+    pulled: list[str] = field(default_factory=list[str])
+    fail_pull: bool = False  # answer a pull with Ollama's error
+    wrong_copy: bool = False  # write a copied manifest with another layer
 
     def fetch(self, url: str) -> bytes | None:
         if url.endswith("/api/ps"):
@@ -53,11 +56,17 @@ class FakeOllama:
             if self.running and self.models:
                 manifest_path(self.models, str(body["model"])).unlink(missing_ok=True)
         elif url.endswith("/api/pull") and self.models:
+            if self.fail_pull:
+                return b'{"error":"pull model manifest: file does not exist"}'
+            self.pulled.append(str(body["model"]))
             self._pull(str(body["model"]))
         elif url.endswith("/api/copy") and self.models:
             target = manifest_path(self.models, str(body["destination"]))
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(manifest_path(self.models, str(body["source"])).read_bytes())
+            data = json.loads(manifest_path(self.models, str(body["source"])).read_text())
+            if self.wrong_copy:
+                data["layers"][0]["digest"] = "sha256:" + "0" * 64
+            _writable(target.parent, self.models)
+            target.write_text(json.dumps(data))
         return b"{}"
 
     def _pull(self, name: str) -> None:
@@ -80,11 +89,20 @@ class FakeOllama:
                 with urllib.request.urlopen(ask) as response:  # noqa: S310
                     parts += response.read()
             assert hashlib.sha256(parts).hexdigest() == digest.split(":")[1], "a blob came back wrong"
-            (self.models / "blobs").mkdir(parents=True, exist_ok=True)
+            _writable(self.models / "blobs", self.models)
             (self.models / "blobs" / digest.replace(":", "-")).write_bytes(parts)
         target = manifest_path(self.models, name)
-        target.parent.mkdir(parents=True, exist_ok=True)
+        _writable(target.parent, self.models)
         target.write_bytes(raw)
+
+
+def _writable(folder: Path, models: Path) -> None:
+    """The fake Ollama writes as Ollama's own user would: where the test made a folder read-only for the
+    shelf, Ollama itself may still write."""
+    for path in [*reversed(folder.parents), folder]:
+        if path.is_relative_to(models) and path.exists() and not os.access(path, os.W_OK):
+            path.chmod(path.stat().st_mode | 0o200)
+    folder.mkdir(parents=True, exist_ok=True)
 
 
 def manifest_path(models: Path, name: str) -> Path:

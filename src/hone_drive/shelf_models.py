@@ -141,7 +141,7 @@ def remove_local(model: LocalModel, ctx: Context) -> None:
 def _remove_ollama(model: LocalModel, ctx: Context) -> None:
     answered = [ctx.send("DELETE", f"{server(ctx.env)}/api/delete", {"model": n}) for n in model.names]
     gone: tuple[type[OSError], ...] = (FileNotFoundError,)
-    if all(a is not None for a in answered):
+    if all(a is not None and b'"error"' not in a for a in answered):
         gone = (FileNotFoundError, PermissionError)  # Ollama removed them; its folder may be read-only to us
     names = [rel for rel in model.files if rel.startswith("manifests")] + [rel for rel, _ in model.links]
     for rel in names:  # the server may not be running: then hone-drive removes them itself
@@ -155,8 +155,11 @@ def _remove_ollama(model: LocalModel, ctx: Context) -> None:
     for rel in names:
         top = rel.split("/", 1)[0]
         _prune_empty(os.path.dirname(model.path(rel)), stop=os.path.join(model.root, top))
-    if any(os.path.lexists(model.path(rel)) for rel in names):
-        raise ShelfRefused(f"Ollama did not remove {model.names[0]}; it is on the drive and still here")
+    left = [rel for rel in names + model.files if os.path.lexists(model.path(rel)) and rel not in still]
+    if left:
+        raise ShelfRefused(
+            f"Ollama did not remove {model.names[0]} ({left[0]} is still here); it is on the drive too"
+        )
 
 
 def listed_blobs(models: str) -> set[str]:

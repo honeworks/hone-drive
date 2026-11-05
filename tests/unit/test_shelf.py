@@ -327,10 +327,13 @@ def test_ollama_040_models_leave_and_come_back_whole(machine: Machine) -> None:
     """Decision D-025: both of Ollama's folders, and the blob a manifests-v2 link points to."""
     v2 = machine.models / "manifests-v2" / "ollama.com" / "library" / "tiny" / "latest"
     before = v2.read_bytes()
+    target = os.readlink(v2) if os.path.islink(v2) else None  # Windows without links: a copy
     assert move(machine, TINY).done == [TINY]
     assert not os.path.lexists(v2) and machine.ollama.deleted == ["tiny:latest"]
     assert shelf.restore(machine.run(), [TINY]).done == [TINY]
-    assert v2.read_bytes() == before and os.path.islink(v2) == (sys.platform != "win32" or os.path.islink(v2))
+    assert v2.read_bytes() == before
+    if target is not None:  # the same link to the same blob, which is there
+        assert os.readlink(v2) == target and (v2.parent / target).resolve().is_file()
     assert TINY in shelf.local_models(machine.run())
     assert shelf.remove(machine.run(), [TINY]).done == [TINY]  # on the computer: the drive may let go
 

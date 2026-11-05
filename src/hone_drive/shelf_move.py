@@ -268,15 +268,25 @@ def _place(
     source, dest = model.path(rel), catalog.drive_file(mount, entry, rel)
     if known is not None and unchanged(dest, known, "drive") and unchanged(source, known, "local"):
         return known
-    size = os.path.getsize(source)
-    if os.path.exists(dest) and os.path.getsize(dest) == size:
+    before = os.stat(source)  # the time recorded is the one the hashed bytes had
+    if os.path.exists(dest) and os.path.getsize(dest) == before.st_size:
         mine = sha256_of(source, direct=False, stop=options.stop)
         if sha256_of(dest, direct=True, stop=options.stop, progress=tick) == mine:
+            _still(source, before)
             return ShelfFile(
-                rel=rel, bytes=size, sha256=mine, drive_ns=mtime_ns(dest), local_ns=mtime_ns(source),
-                cache=read_back_cache(dest),
+                rel=rel, bytes=before.st_size, sha256=mine, drive_ns=mtime_ns(dest),
+                local_ns=before.st_mtime_ns, cache=read_back_cache(dest),
             )  # fmt: skip
     digest, cache = copy_checked(source, dest, options.stop, tick)
+    _still(source, before)
     return ShelfFile(
-        rel=rel, bytes=size, sha256=digest, drive_ns=mtime_ns(dest), local_ns=mtime_ns(source), cache=cache
-    )
+        rel=rel, bytes=before.st_size, sha256=digest, drive_ns=mtime_ns(dest),
+        local_ns=before.st_mtime_ns, cache=cache,
+    )  # fmt: skip
+
+
+def _still(source: str, before: os.stat_result) -> None:
+    """A file that changed while it was copied was not proven: nothing is recorded or removed."""
+    after = os.stat(source)
+    if (after.st_size, after.st_mtime_ns) != (before.st_size, before.st_mtime_ns):
+        raise ShelfDamaged(f"{source} changed while it was being copied; try again when nothing writes it")

@@ -52,15 +52,29 @@ def ollama_here(entry: ShelfModel, mount: str) -> bool:
     """Ollama has every name of the model on the computer, each listing the drive copy's config and
     layers, and every one of those blobs is there."""
     try:
-        data = cast(dict[str, Any], json.loads(drive_manifest(entry, mount)))
+        digests = manifest_digests(json.loads(drive_manifest(entry, mount)))
     except (OSError, ValueError, IndexError):
         return False
-    config = cast(dict[str, Any], data.get("config") or {})
-    layers = [config, *cast(list[dict[str, Any]], data.get("layers") or [])]
-    digests = tuple(str(layer["digest"]) for layer in layers if layer.get("digest"))
     names = {m.name for m in read_manifests(entry.root) if m.digests == digests}
     blobs = [os.path.join(entry.root, "blobs", d.replace(":", "-", 1)) for d in digests]
     return set(entry.names) <= names and all(os.path.isfile(b) for b in blobs)
+
+
+def manifest_digests(data: object) -> tuple[str, ...]:
+    """A manifest's config and layer digests, in order; ValueError unless it has a config digest and at
+    least one layer, each a string (an empty or broken manifest is never "the same model")."""
+    if not isinstance(data, dict):
+        raise ValueError("not a manifest")
+    manifest = cast(dict[str, Any], data)
+    config, layers = manifest.get("config"), manifest.get("layers")
+    if not isinstance(config, dict) or not isinstance(layers, list) or not layers:
+        raise ValueError("not a manifest")
+    found: list[object] = [cast(dict[str, Any], config).get("digest")]
+    for layer in cast(list[object], layers):
+        found.append(cast(dict[str, Any], layer).get("digest") if isinstance(layer, dict) else None)
+    if not all(isinstance(d, str) and d for d in found):
+        raise ValueError("a manifest without its digests")
+    return tuple(str(d) for d in found)
 
 
 def bring_back(entry: ShelfModel, mount: str, ctx: Context) -> None:
@@ -81,6 +95,7 @@ def bring_back(entry: ShelfModel, mount: str, ctx: Context) -> None:
         for method, path, body in steps:
             answer = ctx.send(method, f"{server(ctx.env)}{path}", body)
             if answer is None or b'"error"' in answer:
+                ctx.send("DELETE", f"{server(ctx.env)}/api/delete", {"model": temp})  # leave no stray name
                 raise ShelfDamaged(f"Ollama could not take back {entry.names[0]} ({path}): {answer!r}")
     finally:
         registry.close()
@@ -129,7 +144,10 @@ def _listen(handler: type[BaseHTTPRequestHandler]) -> list[ThreadingHTTPServer]:
             if exc.errno == errno.EADDRINUSE:
                 four.server_close()
                 continue
-            return [four]  # no IPv6 loopback: localhost is 127.0.0.1 only
+            if exc.errno in (errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT):
+                return [four]  # no IPv6 loopback: localhost is 127.0.0.1 only
+            four.server_close()
+            raise
         six.daemon_threads = True
         return [four, six]
     raise OSError("no free port on both loopback addresses")

@@ -42,10 +42,20 @@ def look() -> Busy:
         found.comfyui |= _main_py(info)
         with contextlib.suppress(psutil.Error, OSError):
             found.files |= {os.path.realpath(f.path) for f in proc.open_files()}
-        maps: Any = getattr(proc, "memory_maps", None)  # not on every OS psutil supports
-        with contextlib.suppress(psutil.Error, OSError, NotImplementedError, TypeError):
-            found.files |= {os.path.realpath(str(m.path)) for m in maps(grouped=True) if m.path}
+        found.files |= _mapped(proc)
     return found
+
+
+def _mapped(proc: Any) -> set[str]:
+    """Files a program has mapped into memory (llama.cpp maps a GGUF file and may close it). psutil has
+    no memory_maps on some systems; there only open files are seen."""
+    import psutil  # noqa: PLC0415
+
+    if not hasattr(proc, "memory_maps"):
+        return set()
+    with contextlib.suppress(psutil.Error, OSError, NotImplementedError):
+        return {os.path.realpath(str(m.path)) for m in proc.memory_maps(grouped=True) if m.path}
+    return set()
 
 
 def _main_py(info: dict[str, Any]) -> set[str]:
