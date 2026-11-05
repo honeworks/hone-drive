@@ -190,6 +190,20 @@ def test_ac7_every_measurement_records_how_the_cache_was_bypassed(tmp_path: Path
             assert any("memory" in w for w in m.warnings)
 
 
+def test_ac7_a_possibly_cached_read_is_never_a_plain_result(capsys: pytest.CaptureFixture[str]) -> None:
+    from hone_drive import cli
+    from tests.unit.test_advice import reference_run
+
+    run = reference_run()
+    for m in run.measurements:
+        m.cache = "possibly-cached"
+    item = next(i for s in run.stores if s.id == "ollama" for i in s.items)
+    estimate = hd.load_time(item, "/", run)
+    assert estimate is not None and estimate.basis == "expected link speed" and estimate.cites == []
+    hd.save_run(run)
+    assert cli.main(["show"]) == 0 and "cache: possibly-cached" in capsys.readouterr().out
+
+
 def test_ac8_the_temporary_file_is_gone_after_a_kill_and_the_next_start(tmp_path: Path) -> None:
     run = bench_volume_run(tmp_path)
     env = {**os.environ}
@@ -254,6 +268,10 @@ def test_ac11_advice_never_runs_a_command_and_always_explains(monkeypatch: pytes
     for item in advice:
         assert item.rule and item.why and item.cites
         assert set(item.commands) <= {run.machine.os}
+    for os_name in ("linux", "macos", "windows"):  # items that ask to act say how, on every OS (D-021)
+        run.machine.os = os_name  # type: ignore[assignment]
+        for item in hd.advise(run, "/home/user"):
+            assert item.severity == "info" or item.commands.get(os_name), (os_name, item.rule)
 
 
 def test_ac13_a_report_removes_private_details() -> None:
@@ -264,9 +282,11 @@ def test_ac13_a_report_removes_private_details() -> None:
     run.drives[1].serial = "PNY1234567"
     run.volumes[1].uuid = "6A1F-0C2D"
     run.stores[1].path = "/home/alice/ComfyUI/models"
+    run.stores.append(hd.Store(id="huggingface", title="Hugging Face cache", path="/srv/acme-models/hf"))
     text = hd.report(run, "md", home="/home/alice") + hd.report(run, "json", home="/home/alice")
-    for private in ("workstation-7", "PNY1234567", "6A1F-0C2D", "alice"):
+    for private in ("workstation-7", "PNY1234567", "6A1F-0C2D", "alice", "acme-models"):
         assert private not in text
+    assert "<custom>" in text
     assert "PNY1234567" in hd.report(run, "json", keep_private=True, home="/home/alice")
 
 

@@ -60,3 +60,23 @@ def test_view_without_measurements_or_external_drive() -> None:
     assert view["drives"][0]["speed"] is None and view["drives"][0]["test_folder"] == "~"
     assert view["models"]["rows"] == [] and view["biggest"] == []
     assert view["volumes"][0]["segments"][-1]["kind"] == "other"
+
+
+def test_models_that_fit_in_free_memory_may_load_warm() -> None:
+    """Design §7: a model that fits in free RAM may come from the OS cache on its second load."""
+    run = reference_run()
+    rows = run_view(run, "/home/user", free_ram=15 * 10**9)["models"]["rows"]
+    assert any(r["warm"] for r in rows) and not all(r["warm"] for r in rows)
+    assert all(r["warm"] == (r["bytes"] < 15 * 10**9) for r in rows)
+    assert not any(r["warm"] for r in run_view(run, "/home/user")["models"]["rows"])  # unknown: never claimed
+
+
+def test_a_possibly_cached_speed_is_flagged_and_gives_no_load_time() -> None:
+    """AC7: a cached measurement is never shown as a plain result."""
+    run = reference_run()
+    for m in run.measurements:
+        if m.volume == "/":
+            m.cache = "possibly-cached"
+    speed = p.speed(run, run.volumes[0])
+    assert speed is not None and speed["cached"] and speed["model_seconds"] is None
+    assert p.speed(run, run.volumes[1])["cached"] is False  # type: ignore[index]

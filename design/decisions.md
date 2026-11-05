@@ -7,7 +7,7 @@ refer to them by number. Entries marked **awaiting owner review** are proposals 
 
 | Entry | Question for the owner |
 |---|---|
-| (none) | |
+| D-019 | design §6.2 now describes the cache fallback the code has, instead of a file twice the size of RAM: keep this? |
 
 On 2026-10-18 the owner accepted design 0001 ("accepted"), and with it every open question with its
 proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
@@ -77,7 +77,8 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
 
 - **Choice:** the repository is created locally; it goes to `github.com/honeworks/hone-drive` and PyPI only
   when the owner asks.
-- **Status:** follows the workspace rules.
+- **Status:** done: the owner published the repository at `github.com/honeworks/hone-drive` on
+  2026-10-18. PyPI is still to come (D-008).
 
 ## D-010: Ollama's service folder is sized through its server  (2026-10-18)
 
@@ -159,7 +160,10 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   installed by default, so it would be "unknown" almost everywhere; design §16 says so.
 - **Why:** AGENTS.md rule 3 (no administrator rights). A later change can read it when the user has set
   up `smartctl` to run without a password.
-- **Status:** a deviation from the accepted design, noted here for the owner.
+- **Status:** answered by the owner on 2026-11-05: hone-drive should read SMART health, and show per OS
+  how to install `smartctl` and allow hone-drive to use it ("then we should have it"). That needs its own
+  change record (a new data source, new instructions, possibly new advice); until it is built, 0.1 reads no
+  SMART health, as design §3.2 and §16 say.
 
 ## D-018: A05 speaks only about volumes that matter  (2026-10-18)
 
@@ -168,3 +172,42 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   Linux, Docker) would move there.
 - **Why:** an exFAT stick for moving files between computers needs no advice.
 - **Status:** follows the design (0001).
+
+## D-019: the cache fallback is what each OS can do, not a file twice the size of RAM  (2026-11-05)
+
+- **Question:** design §6.2 said that when direct I/O is refused, the test writes a file at least twice
+  the machine's RAM so the cache can't hold it. The code never did: on Linux it drops the file's pages
+  with `posix_fadvise(DONTNEED)` (`cache: fallback`), elsewhere it marks the result `possibly-cached`.
+- **Choice:** the design now describes the code. A `possibly-cached` result carries a warning, is shown
+  greyed out (drive card and chart) and is never used for a load or copy time.
+- **Why:** on the reference machine (30 GB RAM) the larger file would be a 60 GB write, more than the free
+  space safety rule 2 allows on most drives, and minutes of wear on a drive that refused direct I/O;
+  direct I/O is refused only on tmpfs and some FUSE filesystems, where no one keeps models.
+- **Status:** awaiting owner review (the owner asked on 2026-11-05 that code and docs agree).
+
+## D-020: when a sustained write is "throttling"  (2026-11-05)
+
+- **Choice:** after at least 5 s whose per-second speeds are each within ±15% of their median, three
+  seconds in a row under 75% of that median label the measurement `throttling after N s`. A fall under half
+  the first seconds' speed is reported first, as `cache exhausted after N GB`; anything else is `steady`.
+- **Why:** design §6.4 names the label ("a drop after a steady stretch") without numbers. ±15% is the
+  tolerance design §4.2 already uses for "link-bound", and three seconds keep one slow second from
+  counting. Not yet checked against a real throttling drive.
+- **Status:** the owner left the numbers open on 2026-11-05 ("I don't know"); they stand as provisional
+  until a sustained-write curve from a real throttling drive confirms or changes them.
+
+## D-021: which advice has commands (guarantee 11)  (2026-11-05)
+
+- **Question:** guarantee 11 says every advice item has commands for the current OS; A01 (full), A04
+  (slow because full) and A09 (keep this file here) had none.
+- **Choice:** guarantee 11 asks for commands on every item that asks the user to act (`warn` and
+  `suggest`); an `info` item may only inform (today A09, "keep this file where it is"). A01 shows
+  `hone-drive scan --account` (what fills the drive) and A04 `hone-drive bench <mount> --tests seq`
+  (check the speed after freeing space). A rule whose OS has no commands written yet gives no advice on
+  that OS (A06 on macOS and Windows) instead of an item with nothing to run.
+- **Why:** a rule by severity is one a contributor adding an advice rule can follow and a test can check
+  for every rule on every OS (`test_ac11_every_item_that_asks_for_action_has_commands`), where a list of
+  named exceptions grows silently; a made-up command for "do nothing" helps no one.
+- **Status:** the owner left it to the implementer on 2026-11-05 ("you decide what's best for an open
+  source project").
+

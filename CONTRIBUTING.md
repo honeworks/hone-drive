@@ -3,7 +3,7 @@
 Thank you for helping. This page covers how to set up, the rules the code follows, how it is tested and
 how the design changes. The design itself is in [`design/`](design/README.md); start with
 [`design/current.md`](design/current.md). The first design, [0001](design/changes/0001-initial-design.md),
-is accepted and being built.
+is accepted and built.
 
 ## Setup and the quality gates
 
@@ -30,7 +30,7 @@ scripts/gpu-lock.sh uv run pytest -m bench    # full-size benchmarks (see below)
 ## Keep it simple
 
 The first rule: **simple, easy to understand, maintainable and expandable.** When simplicity conflicts
-with anything except correctness and the guarantees in [`design/current.md`](design/current.md#14-guarantees-acceptance-cases),
+with anything except correctness and the guarantees in [`design/current.md`](design/current.md#15-guarantees-acceptance-cases),
 simplicity wins. A newcomer should be able to open any module, understand what it does in a few minutes
 and change it safely.
 
@@ -76,7 +76,8 @@ entry points, event buses and dependency-injection containers.
 - **Ports and adapters.** A port is a small `typing.Protocol` owned by hone-drive (today one: `Probe`,
   design §3.1, with one implementation per OS); adapters are injected as constructor arguments or found
   through entry points; every port has a fake and a contract checker.
-- **Three systems.** Code outside the probes and the direct-I/O module never branches on the OS. Paths are
+- **Three systems.** OS behaviour lives in the probes and the direct-I/O module; elsewhere the OS's name
+  only picks a path, a hint or a command to show (the data folder, store locations, advice). Paths are
   `pathlib.Path`; commands run as argument lists (never through a shell) with a timeout; their output is
   parsed from JSON or plist where the tool offers it, and numbers are never parsed from text formatted
   for the user's locale.
@@ -98,11 +99,11 @@ entry points, event buses and dependency-injection containers.
 | Contract | `tests/contract/` | yes | the ports' implementations and fakes pass the contract checkers |
 | Integration | `tests/integration/` | yes | modules together with real local resources: the filesystem, subprocesses, local services |
 | Acceptance | `tests/e2e/` | yes | the numbered guarantees of [`design/current.md`](design/current.md#15-guarantees-acceptance-cases), through the public API and CLI only |
-| Benchmark | `tests/bench/` | no | full-size benchmarks on real drives: shapes, cache bypass, safety rules; never a speed |
+| Benchmark | `tests/bench/` (none yet) | no | full-size benchmarks on real drives: shapes, cache bypass, safety rules; never a speed |
 
 - The default suite must stay fast, deterministic and offline, and runs on Linux, macOS and Windows in CI.
 - Probes are tested against command outputs and sysfs trees recorded on real machines, kept in
-  `tests/fixtures/<os>/<machine>/`, with serials and user names replaced before they are committed.
+  `tests/fixtures/<os>/<machine>.json`, with serials and user names replaced before they are committed.
 - Every acceptance case has a test in `tests/e2e/` named `test_ac<N>_<slug>`, using only the public API or
   CLI. An acceptance test must fail if its feature is removed.
 - The README quickstart, every Python block in `docs/` and every file in `examples/` are run by the tests,
@@ -118,9 +119,9 @@ hone-drive calls no AI model, so it has no real-model tests. Its heavy tests are
 (`-m bench`, in `tests/bench/`): they write and read gigabytes on real drives. They run only through
 `scripts/gpu-lock.sh`, the machine-wide lock every honeworks project uses (`$HONE_GPU_LOCK`, default
 `/tmp/honeworks-gpu.lock`): a 4 GiB write disturbs another project's model run on the same machine, and is
-disturbed by it (design/decisions.md D-006). They use the volumes in `HONE_DRIVE_TEST_VOLUMES`, check free
-space first and skip with a reason when it is short. The default suite runs one 64 MiB benchmark for its
-shape only.
+disturbed by it (design/decisions.md D-006). None are written yet; when they are, they should check free
+space first and skip with a reason when it is short. The default suite runs small (32–64 MiB) benchmarks
+in the temporary folder for their shape only.
 
 ## Changing the design
 

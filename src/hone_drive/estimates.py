@@ -59,6 +59,7 @@ def load_time(item: Item, mount: str, run: Run) -> Estimate | None:
 
 
 def write_speed(run: Run, mount: str) -> tuple[float, list[str]] | None:
+    """(GB/s, measurement ids) for writing to `mount`; the link's expected speed (no ids) without one."""
     for test in ("sustained-write", "seq-write"):
         found = [
             m
@@ -67,6 +68,10 @@ def write_speed(run: Run, mount: str) -> tuple[float, list[str]] | None:
         ]
         if found:
             return found[-1].gbs, [found[-1].id]
+    volume = run.volume(mount)
+    drive = run.drive(volume.drive_id if volume else None)
+    if drive is not None and drive.link.expected_gbs:
+        return drive.link.expected_gbs, []
     return None
 
 
@@ -78,11 +83,12 @@ def copy_time(store: Store, source: str, target: str, run: Run) -> Estimate | No
         return None
     gbs = min(read[0], write[0])
     seconds = store.bytes / (gbs * 1e9)
+    measured = read[2] != "expected link speed" and bool(write[1])
     return Estimate(
         round(seconds, 1),
         round(seconds * 0.8, 1),
         round(seconds * 1.3, 1),
-        "measured read and write",
+        "measured read and write" if measured else "expected link speed",
         read[3] + write[1],
         note="copy time: reading the source and writing the target",
     )

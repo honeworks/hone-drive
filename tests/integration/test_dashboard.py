@@ -123,6 +123,7 @@ def test_run_view_compare_and_report(server: Server) -> None:
     assert [s["kind"] for s in root["segments"]][:2] == ["ollama", "comfyui"]
     gemma = next(m for m in view["models"]["rows"] if m["names"] == ["gemma4:31b"])
     assert set(gemma["loads"]) == {"/", "/run/media/user/PNYRP60PSSD"}
+    assert isinstance(gemma["warm"], bool)  # from this machine's free memory now (design §7)
     assert view["headline"]["title"] == "Internal drive is 89% full"
     assert [s["key"] for s in view["plan"]["steps"]] == ["clean", "prepare", "move", "speed"]
     pny = next(d for d in view["drives"] if d["external"])

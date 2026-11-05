@@ -42,7 +42,7 @@ class Options:
     size: int = DEFAULT_SIZE
     sustained_size: int = 32 * 1024**3
     sustained_seconds: float = 120.0
-    random_seconds: float = 10.0
+    random_seconds: float = 20.0  # half one read at a time, half 32 in flight (design §6.1)
     model_files: list[str] = field(default_factory=list[str])
     on_tick: Callable[[Tick], None] | None = None
     stop: threading.Event = field(default_factory=threading.Event)
@@ -261,8 +261,9 @@ def _random(path: str, mount: str, options: Options) -> Measurement:
             t0 = time.monotonic()
             handle.readinto(data)
             latencies.append(time.monotonic() - t0)
+    parallel_start = time.monotonic()
     counts = _parallel_reads(path, blocks, options)
-    seconds = options.random_seconds / 2
+    seconds = max(time.monotonic() - parallel_start, 1e-9)  # measured, not planned (design §6.2)
     result = _measure("random-read", mount, sum(counts) * ALIGN, seconds, opened.cache, [])
     result.iops = round(sum(counts) / seconds, 1)
     result.latency_ms = round(statistics.median(latencies) * 1000, 3) if latencies else None
@@ -276,10 +277,12 @@ def _parallel_reads(path: str, blocks: int, options: Options) -> list[int]:
     def worker(seed: int) -> int:
         rng, data, count = random.Random(seed), buffer(ALIGN), 0  # noqa: S311 - offsets, not secrets
         with open_file(path, write=False).file as handle:
-            while time.monotonic() < deadline and not options.stop.is_set():
+            while not options.stop.is_set():  # at least one read: a thread may start after the deadline
                 handle.seek(rng.randrange(blocks) * ALIGN)
                 handle.readinto(data)
                 count += 1
+                if time.monotonic() >= deadline:
+                    break
         return count
 
     with ThreadPoolExecutor(max_workers=32) as pool:
@@ -303,12 +306,23 @@ def _label(run: Run, found: list[Measurement]) -> None:
             m.label = sustained_label(m.curve)
 
 
+STEADY_S = 5  # seconds of steady writing before a drop counts as throttling (decision D-020)
+
+
 def sustained_label(curve: list[float]) -> str | None:
-    """`cache exhausted after N GB`: throughput falls under half its first seconds and stays there."""
+    """`cache exhausted after N GB`: throughput falls under half its first seconds and stays there;
+    `throttling after N s`: it falls under 75% of a steady stretch (each second within ±15% of its
+    median) for three seconds; `steady` otherwise (design §6.4)."""
     if len(curve) < 6:
         return None
     start = statistics.median(curve[:3])
     for index in range(3, len(curve) - 2):
         if all(v < start * 0.5 for v in curve[index : index + 3]):
             return f"cache exhausted after {sum(curve[:index]):.0f} GB"
+    for index in range(STEADY_S, len(curve) - 2):
+        stretch = curve[index - STEADY_S : index]
+        level = statistics.median(stretch)
+        steady = all(abs(v - level) <= 0.15 * level for v in stretch)
+        if steady and all(v < 0.75 * level for v in curve[index : index + 3]):
+            return f"throttling after {index} s"
     return "steady"

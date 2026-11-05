@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from hone_drive.advice import RULES, advise
 from hone_drive.model import Accounting, Duplicate, Item, Measurement, Run, Store, TestName
 from hone_drive.scanner import scan
@@ -186,3 +188,58 @@ def test_windows_and_macos_commands() -> None:
         torch = next(a for a in advice if a.title == "Clean PyTorch hub")
         expected = "Remove-Item" if os_name == "windows" else "rm -rf"
         assert expected in torch.commands[os_name][0]
+
+
+def test_ac11_findings_show_the_command_that_checks_them() -> None:
+    """AC11: A01 and A04 come with the hone-drive command that measures them again."""
+    run = reference_run()
+    items = {a.rule: a for a in advise(run, HOME)}
+    assert items["A01"].commands["linux"] == ["hone-drive scan --account"]
+    assert items["A04"].commands["linux"] == ["hone-drive bench / --tests seq"]
+
+
+@pytest.mark.parametrize("os_name", ["linux", "macos", "windows"])
+def test_ac11_every_item_that_asks_for_action_has_commands(os_name: str) -> None:
+    """AC11 (decision D-021): `warn` and `suggest` items have commands for the OS; `info` items inform only."""
+    run = reference_run()
+    run.machine.os = os_name  # type: ignore[assignment]
+    found = advise(run, HOME)
+    assert {a.severity for a in found} >= {"warn", "suggest", "info"}
+    for item in found:
+        assert item.severity == "info" or item.commands.get(os_name), (item.rule, item.title)
+
+
+def test_a06_only_where_its_commands_exist() -> None:
+    run = reference_run()
+    assert "A06" in by_rule(run)
+    run.machine.os = "macos"
+    assert "A06" not in by_rule(run)
+
+
+def test_a07_never_offers_to_prune_docker_volumes_or_containers() -> None:
+    run = reference_run()
+    docker = Store(
+        id="docker",
+        title="Docker",
+        items=[
+            Item(id=k, names=[n], bytes=9 * 10**9, details={"reclaimable_bytes": str(9 * 10**9), "clean": c})
+            for k, n, c in [
+                ("images", "Images", "docker image prune -a"),
+                ("local-volumes", "Local Volumes", ""),
+                ("containers", "Containers", ""),
+            ]
+        ],
+    )
+    run.stores.append(docker)
+    titles = by_rule(run)["A07"]
+    assert "Clean Docker images" in titles
+    assert not any("volumes" in t or "containers" in t for t in titles)
+
+
+def test_a02_says_when_a_copy_time_is_estimated() -> None:
+    run = reference_run()
+    move = next(a for a in advise(run, HOME) if a.rule == "A02")
+    assert any("estimated from the connections" in line for line in move.why)
+    run.measurements.append(measured("seq-write", EXT, 0.89))
+    move = next(a for a in advise(run, HOME) if a.rule == "A02")
+    assert any(line.startswith("Copying takes about") and "estimated" not in line for line in move.why)

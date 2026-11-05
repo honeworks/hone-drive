@@ -46,6 +46,7 @@ def a01_full_volumes(run: Run, home: str) -> list[Advice]:
                 ],
                 cites=[f"volume:{volume.mount}"],
                 gain=Gain(bytes_freed=to_80),
+                commands={run.machine.os: ["hone-drive scan --account"]},  # finds what fills it (AC11)
             )
         )
     return found
@@ -125,6 +126,7 @@ def a04_full_and_slow(run: Run, home: str) -> list[Advice]:
                     "Freeing space should bring the write speed back. Keep at least 15 to 20% free.",
                 ],
                 cites=[writes[0].id, *[m.id for m in reads[:1]], f"volume:{volume.mount}"],
+                commands={run.machine.os: [f"hone-drive bench {volume.mount} --tests seq"]},  # after freeing
             )
         )
     return found

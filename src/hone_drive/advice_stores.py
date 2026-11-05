@@ -73,7 +73,8 @@ def a02_move_stores(run: Run, home: str) -> list[Advice]:
                 cites += now.cites + then.cites
         copying = copy_time(store, source.mount, target.mount, run)
         if copying:
-            why.append(f"Copying takes about {text.seconds(copying.seconds)}.")
+            guess = "" if copying.basis == "measured read and write" else " (estimated from the connections)"
+            why.append(f"Copying takes about {text.seconds(copying.seconds)}{guess}.")
         if models:
             why.append(
                 "Only loading gets slower: once a model is loaded it runs from GPU memory and RAM "
@@ -154,8 +155,9 @@ def a06_mount_at_boot(run: Run, home: str) -> list[Advice]:
     holding = {s.volume for s in run.stores} | {t.mount for _, _, t in planned_moves(run)}
     found: list[Advice] = []
     for volume in external_targets(run):
-        if volume.at_boot is not False or volume.mount not in holding:
-            continue
+        lines = commands.mount_at_boot(volume, run.machine.os)
+        if volume.at_boot is not False or volume.mount not in holding or not lines:
+            continue  # no lines: this OS's way is not written yet (design §8.1: Linux only in 0.1)
         found.append(
             Advice(
                 rule="A06",
@@ -167,7 +169,7 @@ def a06_mount_at_boot(run: Run, home: str) -> list[Advice]:
                     "The `nofail` option lets the computer start normally when the drive is unplugged.",
                 ],
                 cites=[f"volume:{volume.mount}"],
-                commands={run.machine.os: commands.mount_at_boot(volume, run.machine.os)},
+                commands={run.machine.os: lines},
                 risks=["Mount it under a fixed path (as below) and use that path in the tools' settings."],
             )
         )

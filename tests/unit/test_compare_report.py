@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+
+import pytest
+
 from hone_drive.compare import compare
 from hone_drive.model import Item, Measurement, Store
 from hone_drive.report import markdown, redacted, report
@@ -65,3 +69,41 @@ def test_markdown_sections() -> None:
     for heading in ("## Drives", "## Volumes", "## Measurements", "## Stores"):
         assert heading in text
     assert "(limited)" in text
+
+
+def test_report_hides_store_paths_outside_the_known_places() -> None:
+    """Design §13: a store path outside the home folder and the tools' default folders is `<custom>`."""
+    run = reference_run()
+    run.stores.append(
+        Store(
+            id="huggingface",
+            title="Hugging Face cache",
+            path="/mnt/projectx/hf/hub",
+            items=[Item(id="m", names=["m"], path="/mnt/projectx/hf/hub/models--m")],
+        )
+    )
+    run.stores.append(Store(id="ollama", title="Ollama models", path="/usr/share/ollama/.ollama/models"))
+    text = report(run, "json", home="/home/user")
+    assert "projectx" not in text and "<custom>" in text
+    assert "/usr/share/ollama/.ollama/models" in text
+    assert "projectx" in report(run, "json", keep_private=True, home="/home/user")
+
+
+@pytest.mark.parametrize(
+    ("root", "inside", "sibling"),
+    [("/mnt/data", "/mnt/data/hf", "/mnt/data2"), ("D:\\models", "D:\\models\\hf", "D:\\models.bak")],
+)
+def test_report_replaces_a_custom_root_only_at_a_path_boundary(root: str, inside: str, sibling: str) -> None:
+    """The root and paths inside it go, in paths and in sentences; a sibling sharing its prefix stays."""
+    run = reference_run()
+    run.stores.append(
+        Store(id="huggingface", title="hf", path=root, items=[Item(id="m", names=["m"], path=inside)])
+    )
+    run.machine.os_version = f"Move {root}, then {root}. Or {root}: see ({root})"
+    run.volumes[1].mount = sibling
+    raw = report(run, "json", home="/home/user")
+    data = json.loads(raw)
+    hf = next(s for s in data["stores"] if s["id"] == "huggingface")
+    assert hf["path"] == "<custom>" and hf["items"][0]["path"] == "<custom>" + inside[len(root) :]
+    assert data["machine"]["os_version"] == "Move <custom>, then <custom>. Or <custom>: see (<custom>)"
+    assert any(v["mount"] == sibling for v in data["volumes"])

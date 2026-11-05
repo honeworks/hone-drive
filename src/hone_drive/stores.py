@@ -144,10 +144,11 @@ def find_huggingface(ctx: Context) -> list[Store]:
             continue
         total = Tally()
         items: list[Item] = []
+        deadline = ctx.deadline()  # one time limit for the whole store (design §5.2)
         for name in sorted(os.listdir(path)):
             if not name.startswith(("models--", "datasets--", "spaces--")):
                 continue
-            tally = size_of(os.path.join(path, name), ctx.deadline(), total.seen)
+            tally = size_of(os.path.join(path, name), deadline, total.seen)
             kind, _, repo = name.partition("--")
             items.append(
                 Item(

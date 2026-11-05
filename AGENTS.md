@@ -22,7 +22,7 @@ probes still need recordings from real machines (design/decisions.md D-012).
 uv sync --all-extras                 # install everything (dev included)
 scripts/check.sh                     # all quality gates: lint, format, types, tests + coverage, build, wheel smoke test
 uv run pytest                        # default suite (fast, offline, deterministic)
-scripts/gpu-lock.sh uv run pytest -m bench   # full-size benchmarks on real drives, under the machine-wide lock
+scripts/gpu-lock.sh uv run pytest -m bench   # full-size benchmarks on real drives, under the lock (none written yet)
 ```
 
 ## Layout
@@ -30,6 +30,7 @@ scripts/gpu-lock.sh uv run pytest -m bench   # full-size benchmarks on real driv
 ```
 src/hone_drive/
   model.py               the data model (design §2); every fact that can be missing has a reason in `unknown`
+  errors.py              typed errors;  __main__.py: `python -m hone_drive`
   ports.py               the Probe port; probe_linux.py, probe_macos.py, probe_windows.py implement it
   system.py              the only module that starts processes: commands with timeouts, read-only files
   links.py  filesystems.py  volumes.py    links and expected speeds, filesystem traits, volumes (psutil)
@@ -41,8 +42,8 @@ src/hone_drive/
   advice.py  advice_stores.py  commands.py   the ten advice rules and the per-OS commands they show
   compare.py  report.py                      run comparison, reports to share
   presentation.py  views.py                  plain-language names, verdicts and the plan the dashboard shows
-  dashboard.py  jobs.py  dashboard_page/     the local server, its one background job, the page (ui.js,
-                                             app.js, screens.js; no build step)
+  dashboard.py  jobs.py  dashboard_page/     the local server, its one background job, the page
+                                             (index.html, app.css, ui.js, app.js, screens.js; no build step)
   runs.py                runs on disk;  text.py: sizes and speeds for people;  cli.py: the command line
   testing.py             FakeProbe, recorded machines, record(), check_probe()
 tests/unit|contract|integration|e2e   tests/fixtures/<os>/<machine>.json: recorded or hand-written machines
@@ -58,7 +59,8 @@ tests/unit|contract|integration|e2e   tests/fixtures/<os>/<machine>.json: record
    timeout; nothing runs as administrator; nothing is moved, deleted or formatted. The only file written
    outside the data folder is the benchmark's temporary file, removed on every path (design §6.3).
 4. **OS specifics stay in the probes and the direct-I/O module:** everything else works on the data model
-   and runs the same on Linux, macOS and Windows (design §3).
+   and runs the same on Linux, macOS and Windows (design §3); outside them the OS's name only picks a
+   path, a hint or a command to show.
 5. **Unknown is `None` with a reason:** never guess, never show zero for a fact an OS can't provide
    (design §2).
 6. **Measured or labelled:** a speed is measured with the cache bypassed and records how; estimates say

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -163,6 +164,9 @@ def cmd_compare(args: argparse.Namespace) -> int:
     from hone_drive.compare import compare  # noqa: PLC0415
 
     changes = compare(load_run(args.a), load_run(args.b))
+    if args.json:
+        _out(json.dumps([vars(c) for c in changes], indent=1, ensure_ascii=False))
+        return 0
     for change in changes:
         _out(f"{change.kind:>6}  {change.subject}: {change.before} → {change.after}  {change.note}")
     if not changes:
@@ -185,6 +189,9 @@ def cmd_dashboard(args: argparse.Namespace) -> int:
 
 
 def cmd_runs(args: argparse.Namespace) -> int:
+    if args.json:
+        _out(json.dumps(list_runs()))
+        return 0
     for run_id in list_runs():
         _out(run_id)
     return 0
@@ -225,7 +232,9 @@ def parser() -> argparse.ArgumentParser:
     bench.add_argument("--run", help="add the measurements to this stored run instead of a new scan")
     bench.add_argument("--json", action="store_true")
     bench.set_defaults(func=cmd_bench)
-    sub.add_parser("runs", help="list stored runs, newest first").set_defaults(func=cmd_runs)
+    runs = sub.add_parser("runs", help="list stored runs, newest first")
+    runs.add_argument("--json", action="store_true")
+    runs.set_defaults(func=cmd_runs)
     advise = sub.add_parser("advise", help="what to move, clean or change, with commands to copy")
     advise.add_argument("run", nargs="?", default="latest")
     advise.add_argument("--json", action="store_true")
@@ -233,6 +242,7 @@ def parser() -> argparse.ArgumentParser:
     comp = sub.add_parser("compare", help="what changed between two runs")
     comp.add_argument("a")
     comp.add_argument("b", nargs="?", default="latest")
+    comp.add_argument("--json", action="store_true")
     comp.set_defaults(func=cmd_compare)
     rep = sub.add_parser("report", help="a report to share, private details removed")
     rep.add_argument("run", nargs="?", default="latest")

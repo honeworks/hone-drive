@@ -16,12 +16,8 @@ DATA_ROOTS = {
     "macos": "~/Library/Containers/com.docker.docker/Data/vms/0/data",
     "windows": "$LOCALAPPDATA/Docker/wsl",
 }
-CLEAN = {
-    "Images": "docker image prune -a",
-    "Containers": "docker container prune",
-    "Local Volumes": "docker volume prune",
-    "Build Cache": "docker builder prune",
-}
+# Only what Docker downloads or builds again (advice A07): stopped containers and volumes hold user data.
+CLEAN = {"Images": "docker image prune -a", "Build Cache": "docker builder prune"}
 
 
 def parse_size(text: str) -> int | None:

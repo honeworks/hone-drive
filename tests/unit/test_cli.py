@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -103,6 +104,9 @@ def test_advise_compare_report_and_dashboard(
     assert cli.main(["advise", "--json"]) == 0 and capsys.readouterr().out.startswith('[{"unknown"')
     assert cli.main(["compare", a.id]) == 0 and "volume  /:" in capsys.readouterr().out
     assert cli.main(["compare", a.id, a.id]) == 0 and "No changes" in capsys.readouterr().out
+    assert cli.main(["compare", a.id, "--json"]) == 0  # every command has --json (design §1, §11)
+    assert json.loads(capsys.readouterr().out)[0]["kind"] == "volume"
+    assert cli.main(["runs", "--json"]) == 0 and json.loads(capsys.readouterr().out) == [b.id, a.id]
     assert cli.main(["report"]) == 0 and "# hone-drive report" in capsys.readouterr().out
     served: list[tuple[int, bool]] = []
     monkeypatch.setattr(

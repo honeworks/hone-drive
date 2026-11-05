@@ -51,10 +51,15 @@ def test_cached_or_partial_results_are_not_used() -> None:
 def test_copy_time_and_warm_loads() -> None:
     run = scan(probe=reference_probe(), finders={})
     store = Store(id="ollama", title="o", bytes=388_000_000_000)
-    assert copy_time(store, "/", EXT, run) is None
+    unmeasured = copy_time(store, "/", EXT, run)  # both from the links' expected speeds (design §7)
+    assert unmeasured is not None and unmeasured.basis == "expected link speed" and unmeasured.cites == []
     run.measurements = [measured("seq-read", "/", 2.2), measured("sustained-write", EXT, 0.89)]
     estimate = copy_time(store, "/", EXT, run)
     assert estimate is not None and round(estimate.seconds / 60) == 7
+    assert estimate.basis == "measured read and write"
+    run.measurements = run.measurements[:1]
+    half = copy_time(store, "/", EXT, run)
+    assert half is not None and half.basis == "expected link speed" and half.cites == ["seq-read@/"]
     assert warm(Item(id="a", names=["a"], bytes=10), run, 100) and not warm(
         Item(id="a", names=["a"]), run, 100
     )

@@ -177,7 +177,7 @@ memory and RAM. A model you loaded recently may even load from the operating sys
 that stays with one machine, use its native filesystem (ext4, APFS, NTFS): exFAT can't store file
 owners, links or a journal, and a service such as Ollama on Linux can't own its files there.
 
-**Where are scans stored?** In `~/.local/share/hone-drive` on Linux, `~/Library/Application
+**Where are scans stored?** In `~/.local/share/hone-drive` on Linux (or `$XDG_DATA_HOME/hone-drive`), `~/Library/Application
 Support/hone-drive` on macOS and `%LOCALAPPDATA%\hone-drive` on Windows (or `HONE_DRIVE_HOME`). They
 never leave your computer unless you share a report.
 

@@ -92,13 +92,13 @@ are never written with a decimal comma (history §2).
 |---|---|---|---|
 | volumes, usage | psutil | psutil | psutil |
 | drive model, size, rotational, removable | `/sys/block/*` | `diskutil info -plist` | `Get-PhysicalDisk`, `Get-Disk` (PowerShell, JSON) |
-| bus | sysfs device path, `lsblk -J -o TRAN` | `diskutil` `Protocol` | `Get-PhysicalDisk` `BusType` |
+| bus | the sysfs device path | `diskutil` `Protocol` | `Get-PhysicalDisk` `BusType` |
 | USB link: negotiated speed, lanes | `/sys/bus/usb/devices/*/speed`, `rx_lanes`, `tx_lanes` | `system_profiler SPUSBHostDataType -json` (`SPUSBDataType` before macOS 15) | unknown in 0.1 (§16) |
-| USB port capability | the root hub's `speed` and lanes | the host controller entry | unknown in 0.1 |
-| Thunderbolt / USB4 link | `/sys/bus/thunderbolt/devices/*` | `system_profiler SPThunderboltDataType -json` | unknown in 0.1 |
+| USB port capability | the root hub's `speed` and lanes | unknown in 0.1 | unknown in 0.1 |
+| Thunderbolt / USB4 link | a PCIe drive sysfs marks `removable` is on Thunderbolt or USB4; its PCIe link as below | unknown in 0.1 | unknown in 0.1 |
 | NVMe PCIe link | `/sys/class/nvme/*/device/current_link_speed`, `_width`, `max_link_*` | `system_profiler SPNVMeDataType -json` (link width and speed) | unknown in 0.1 |
 | GPUs | `nvidia-smi`, `/sys/class/drm` | `system_profiler SPDisplaysDataType -json` | `Get-CimInstance Win32_VideoController`, `nvidia-smi` |
-| SMART health (optional) | `smartctl -j` when installed and permitted | same | same |
+| SMART health | not read in 0.1 (§16, decision D-017) | same | same |
 
 Every probe command is optional: a missing tool or a refusal gives `None` with the reason, and the rest of
 the scan goes on.
@@ -108,11 +108,12 @@ the scan goes on.
 ### 4.1 Link speed and what limits it
 
 A `Link` holds `negotiated_gbps`, `negotiated_lanes`, `port_max_gbps`, `port_max_lanes` and
-`device_max_gbps` where known. A link is **limited** when it negotiated less than both the port and the
-device can do; the dashboard shows the gap ("10 of 20 Gbps, 1 of 2 lanes") and advice A03 (§8) names the
-likely causes in order: the cable, an adapter or hub, the port, the drive's own mode. When the device's
-maximum is unknown (common: USB devices rarely say), the dashboard shows the negotiated speed, the
-port's maximum and the drive's model, and says it could not tell whether the drive can go faster.
+`device_max_gbps` where known. A link is **limited** when it negotiated less than the port can do and the
+device is not known to be the cap: less than both when the device reports its maximum, less than the
+port when it doesn't (common: USB devices rarely say). The dashboard shows the gap ("10 of 20 Gbps, 1 of
+2 lanes") and advice A03 (§8) names the likely causes in order: the cable, an adapter or hub, the port,
+the drive's own mode; when the device's maximum is unknown, A03 adds that the drive may already be at its
+limit.
 
 ### 4.2 Expected speeds
 
@@ -125,8 +126,10 @@ that is slow from a link that is slow (decision D-004):
 | USB 3.2 Gen 1 (5 Gbps) | 0.45 GB/s |
 | USB 3.2 Gen 2 (10 Gbps) | 1.05 GB/s |
 | USB 3.2 Gen 2x2 (20 Gbps) | 2.0 GB/s |
-| USB4 / Thunderbolt 3–4 (40 Gbps), NVMe enclosure | 2.8–3.8 GB/s |
-| PCIe 3.0 x4 / 4.0 x4 / 5.0 x4 | 3.5 / 7 / 14 GB/s |
+| USB4 / Thunderbolt 3–4 (40 Gbps), NVMe enclosure | 3.8 GB/s (enclosures often reach 2.8) |
+| USB4 v2 (80 Gbps) | 7.0 GB/s |
+| PCIe 3.0 x4 / 4.0 x4 / 5.0 x4 | 3.5 / 7 / 14 GB/s (0.9 of the lanes' rate) |
+| SATA 1.5 / 3 / 6 Gbps | 0.15 / 0.28 / 0.55 GB/s |
 
 A measured read within 15% of its link's figure is **link-bound**; well below it, **drive-bound**.
 
@@ -145,9 +148,9 @@ Each volume's filesystem is mapped to traits that matter for AI work:
 
 ### 4.4 Fill level
 
-A volume's `used_fraction` is shown with the drive's kind. Above 85% on an SSD, advice A04 warns that
-writes slow down as the drive's fast cache shrinks, and cites this machine's own measured write speed
-when there is one (history §3).
+A volume's `used_fraction` is shown with the drive's kind. Above 85% on an internal SSD with a measured write
+speed, advice A04 warns that writes slow down as the drive's fast cache shrinks, citing that measurement
+(history §3); without a write measurement it says nothing.
 
 ## 5. Where the space goes
 
@@ -158,13 +161,13 @@ id (CONTRIBUTING "Variants": a dict of functions, not a class hierarchy). 0.1 kn
 
 | Store id | Default locations (overridden by) | Items |
 |---|---|---|
-| `ollama` | Linux service `/usr/share/ollama/.ollama/models`, `/var/lib/ollama`; user `~/.ollama/models`; macOS `~/.ollama/models`; Windows `%USERPROFILE%\.ollama\models` (`OLLAMA_MODELS`, also read from the systemd unit) | models from `manifests/`, sized by their unique blobs; when the folder belongs to the service's own user, from the local Ollama server's `/api/tags` (decision D-010) |
+| `ollama` | Linux service `/usr/share/ollama/.ollama/models`, `/var/lib/ollama/.ollama/models`; user `~/.ollama/models`; macOS `~/.ollama/models`; Windows `%USERPROFILE%\.ollama\models` (`OLLAMA_MODELS`, also read from the systemd unit) | models from `manifests/`, sized by their unique blobs; when the folder belongs to the service's own user, from the local Ollama server's `/api/tags` (decision D-010) |
 | `huggingface` | `~/.cache/huggingface/hub` (`HF_HUB_CACHE`, `HF_HOME`) | repos (`models--org--name`), sized by unique blobs |
-| `comfyui` | folders named `ComfyUI` with a `models/` folder under the home folder, two levels deep, plus `extra_model_paths.yaml` entries and paths the user adds | model files by subfolder (`checkpoints`, `diffusion_models`, `text_encoders`, `loras`, …) |
+| `comfyui` | folders whose name contains "comfy" with a `main.py` and a `models/` folder, up to three levels under the home folder, plus their `extra_model_paths.yaml` entries | model files by subfolder (`checkpoints`, `diffusion_models`, `text_encoders`, `loras`, …) |
 | `lmstudio` | `~/.lmstudio/models`, `~/.cache/lm-studio/models` | model files |
-| `llamacpp` | `~/.cache/llama.cpp` (`LLAMA_CACHE`) | GGUF files |
-| `docker` | `docker system df --format json` when Docker answers; otherwise the data root, marked unreadable | images, containers, volumes, build cache with their reclaimable size |
-| `caches` | uv, pip, npm, pnpm, conda, Hugging Face `xet`, torch hub, whisper, Playwright browsers | one item per cache, with its clean command |
+| `llamacpp` | `~/.cache/llama.cpp`, `~/Library/Caches/llama.cpp`, `%LOCALAPPDATA%\llama.cpp` (`LLAMA_CACHE`) | GGUF files |
+| `docker` | `docker system df --format json` when Docker answers (no store when it doesn't); the data root from `docker info` | images, containers, volumes, build cache with their reclaimable size |
+| `caches` | uv, pip, npm, pnpm, conda, Hugging Face `xet`, torch hub, whisper, Playwright browsers, pacman, apt, dnf, Homebrew | one item per cache, with its clean command |
 
 Users add folders of their own (`hone-drive scan --add ~/models`) as the store `custom`.
 
@@ -175,13 +178,13 @@ Users add folders of their own (`hone-drive scan --add ~/models`) as the store `
 - A store's items that share files (two Ollama names for one model; Hugging Face snapshots) list every
   name, and the store's size counts each file once.
 - Folders that can't be read are listed with "not readable" and are never counted as empty.
-- Scans run in a background thread with a per-store time limit (default 60 s); a store that times out
+- Each store has one time limit (default 60 s) for all its folders; a store that times out
   is marked partial with the bytes counted so far.
 
 ### 5.3 Duplicates
 
-Two files are duplicates only when their bytes are identical. Candidates are files over 100 MB with
-equal sizes in different stores; an Ollama blob's name is its SHA-256, so a candidate is hashed once and
+Two files are duplicates only when their bytes are identical. Candidates are files over 100 MB (every file inside a
+Hugging Face repo, every Ollama blob) with equal sizes in different model stores; an Ollama blob's name is its SHA-256, so a candidate is hashed once and
 compared with that name; other pairs are hashed both. Hashing is opt-in (`--duplicates`) because it reads
 the files. The same model in different formats (a GGUF in Ollama, safetensors in ComfyUI) is not a
 duplicate and is never reported as one; the history explains why (history §4).
@@ -194,7 +197,7 @@ walk couldn't read but a server sized (Ollama's service folder through its API, 
 walk takes minutes on a large disk, so it runs only when asked (`scan --account`, the dashboard's
 "Account for space"; decision D-011); it also lists the biggest folders two levels down. When it is over 5% of the volume, the dashboard shows it with the likely hiding places
 for this OS (other users' home folders, model servers running as their own user, container data roots,
-deleted files still held open, snapshots, swap files) and the administrator command that would measure
+deleted files still held open, snapshots, Windows' page and hibernation files) and the administrator command that would measure
 them (`sudo du -xh --max-depth=3 / | sort -rh | head -40` on Linux and its equivalents), which it shows
 but never runs.
 
@@ -223,9 +226,11 @@ Every read and write test bypasses the operating system's cache, or says it coul
 | macOS | `fcntl(F_NOCACHE)` on the file |
 | Windows | `CreateFileW` with `FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH` through `ctypes`, aligned buffers |
 
-When direct I/O is refused (some filesystems do), the test falls back to a file at least twice the
-machine's RAM and marks the measurement `cache: fallback`; when even that does not fit, it is marked
-`cache: possibly cached` and shown greyed out. `model-read` uses the same flags, so a model file read a
+When direct I/O is refused (tmpfs and some FUSE filesystems), Linux writes through the cache and then
+asks the kernel to drop the file's pages (`posix_fadvise(DONTNEED)`) before reading it back, and marks
+the measurement `cache: fallback`; on macOS and Windows, which have no such call, it is marked
+`cache: possibly-cached`, carries a warning, is shown greyed out and is never used for an estimate
+(decision D-019). `model-read` uses the same flags, so a model file read a
 minute ago is not measured from RAM. Throughput is computed from monotonic timestamps in Python, never
 parsed from another tool's output (history §2).
 
@@ -246,7 +251,8 @@ parsed from another tool's output (history §2).
 
 Each measurement is compared with the link's expected speed (§4.2) and, for internal drives, with the
 fill level (§4.4). The dashboard labels it `link-bound`, `drive-bound`, `cache exhausted after N GB`
-(from the sustained curve) or `throttling` (a drop after a steady stretch).
+(from the sustained curve), `throttling after N s` (a drop after a steady stretch) or `steady`
+(decision D-020).
 
 ## 7. Estimates
 
@@ -257,7 +263,8 @@ fill level (§4.4). The dashboard labels it `link-bound`, `drive-bound`, `cache 
 - **Warm loads**: when an item fits in free RAM it may come from the page cache on the second load; the
   dashboard says so instead of promising the disk figure every time.
 - **Copy time** of a store between two volumes = bytes ÷ min(source read, target sustained write).
-- Estimates without a measurement for that volume use the link's expected speed and say so.
+- Estimates without a measurement for that volume use the link's expected speed and say so (a copy
+  time is "measured" only when both its read and its write were).
 
 ## 8. Advice
 
@@ -268,15 +275,15 @@ zero or more `Advice` items. 0.1 has:
 
 | Id | When | Says |
 |---|---|---|
-| A01 | a volume is over 85% full | which stores and items to move or clean first, with the space each frees |
-| A02 | a store over 20 GB is on a fuller or slower-to-write volume than an available external one | move it, with the store's own setting (`OLLAMA_MODELS`, `HF_HOME`, ComfyUI `extra_model_paths.yaml`, LM Studio's folder) and the change in load time per item |
+| A01 | a volume of 10 GB or more is over 85% full | which stores and items to move or clean first, with the space each frees |
+| A02 | a store over 20 GB is on a fuller volume than the emptiest external one, which has room for it | move it, with the store's own setting (`OLLAMA_MODELS`, `HF_HOME`, ComfyUI `extra_model_paths.yaml`, LM Studio's folder) and the change in load time per item |
 | A03 | a link is limited (§4.1) | the gap, the likely causes in order, what to try; "test again" re-runs the probe |
-| A04 | an internal SSD over 85% full measured writes far below its link (§4.4) | the slowdown is likely the fill level; freeing space should restore it |
-| A05 | a volume that holds a store, or that A02 would move one to, lacks a trait it needs (§4.3) | e.g. Ollama's service user can't own files on exFAT: reformat as the OS's native filesystem (with the warning that this erases it) or run the server as your user |
-| A06 | an external volume holds a store a service reads at boot, and the volume is not mounted at boot | how to mount it at boot for this OS (an `/etc/fstab` line with `nofail`, a launchd note, a fixed drive letter) |
-| A07 | a cache is large and safe to clean (uv, pip, npm, Docker build cache, package manager caches) | the clean command and the bytes it frees; for caches that need the same volume as projects (uv, pnpm), "clean, don't move" |
+| A04 | an internal SSD over 85% full has a measured write under 30% of its measured read (or of its link without one) (§4.4) | the slowdown is likely the fill level; freeing space should restore it |
+| A05 | an external volume that holds a store, or that A02 would move one to, lacks a trait it needs (§4.3, D-018) | e.g. Ollama's service user can't own files on exFAT: reformat as the OS's native filesystem (with the warning that this erases it) or run the server as your user |
+| A06 | an external volume holds a store (or A02 would move one there) and is known not to be mounted at boot: Linux only in 0.1, since the macOS and Windows probes can't tell | an `/etc/fstab` line with `nofail` |
+| A07 | a cache is safe to clean and at least 1 GB (uv, pip, npm, package manager caches; Docker's build cache and unused images from 2 GB; never containers or volumes) | the clean command and the bytes it frees; for caches that need the same volume as projects (uv, pnpm), "clean, don't move" |
 | A08 | byte-identical duplicates exist (§5.3) | which copy to keep and how to point the other tool at it |
-| A09 | an item is used often (recently accessed) and large, and its load time from the external volume is over 2× the internal one | keep it on the internal drive |
+| A09 | an item A02 would move is 5 GB or more, was used in the last 14 days, and would load over 2× slower from the external volume | keep it on the internal drive |
 | A10 | space is unaccounted (§5.4) | where it may be and the administrator command that would measure it |
 
 ### 8.2 Advice items
@@ -290,7 +297,7 @@ run by hone-drive; the dashboard has a copy button. Advice is ranked by severity
 
 A run is one JSON document: `id` (UTC time and a short hash), hone-drive version, the machine, drives,
 volumes, stores, measurements, advice, and the probe commands with their exit codes. Runs are stored in
-the data folder (`HONE_DRIVE_HOME`, default: `~/.local/share/hone-drive` on Linux, `~/Library/Application
+the data folder (`HONE_DRIVE_HOME`, default: `$XDG_DATA_HOME/hone-drive` or `~/.local/share/hone-drive` on Linux, `~/Library/Application
 Support/hone-drive` on macOS, `%LOCALAPPDATA%\hone-drive` on Windows), one file per run, written
 atomically. `compare(a, b)` lists what changed: drives added or removed, links renegotiated, volumes
 fuller or emptier, throughput up or down beyond the measurements' spread (at least ±10%).
@@ -317,7 +324,7 @@ tones and the plan on the server; the page only draws.
 | Plan | what was found (full, slow), then the advice as ordered steps: clean caches, prepare the external drive, move model folders, get full speed, find hidden space; each task with what it frees, a checkbox kept in the browser, and "How to do it" with the commands and their risks |
 | Space | a bar per drive with each store in its fixed colour, a table of the same, the biggest single things, and the two slow scans (hidden space, duplicates) as buttons with what they do |
 | Drives & speed | read and write speed compared across drives, then each drive's card with its filesystem and startup notes and its technical details |
-| Models | every model with its tool, size and drive, and its load time from each drive (estimated from the connection until the drive is tested, and labelled so) |
+| Models | every model with its tool, size and drive, and its load time from each drive (estimated from the connection until the drive is tested, and labelled so), with a note when it fits in the memory free now and may load warm (§7) |
 | History | compare two scans, open an older one, download a report to share |
 
 Charts are inline SVG and HTML drawn by the page, in the dataviz reference palette for light and dark
@@ -331,9 +338,9 @@ screenshots.
 
 ## 11. The command line
 
-`hone-drive [dashboard] [--port N] [--no-browser]`, `scan [--add PATH] [--account] [--duplicates]
+`hone-drive [dashboard [--port N] [--no-browser]]`, `scan [--add PATH] [--account] [--duplicates]
 [--json]`, `bench [PATH ...] [--tests seq,random,sustained,model] [--size 4G] [--model FILE] [--run ID]
-[--json]`, `advise [RUN] [--json]`, `runs`, `show [RUN] [--json]`, `compare RUN_A [RUN_B]`, `report [RUN]
+[--json]`, `advise [RUN] [--json]`, `runs [--json]`, `show [RUN] [--json]`, `compare RUN_A [RUN_B] [--json]`, `report [RUN]
 [--format md|json] [--keep-private]`. `RUN` defaults to `latest`. Commands print a short human summary,
 or JSON with `--json`; `scan` and `bench` save the run with its advice. The CLI uses `argparse` (decision
 D-002); `python -m hone_drive` is the same command.
@@ -361,7 +368,7 @@ contract checker `check_probe()`.
 
 `report()` writes Markdown or JSON from a run for sharing in an issue or a forum. By default it removes
 serial numbers, volume UUIDs, the user name and home path (replaced by `~`), host name and any store path
-outside known defaults (replaced by `<custom>`); `--keep-private` keeps them. Runs on disk keep
+outside the home folder and the tools' default folders (replaced by `<custom>` wherever it appears); `--keep-private` keeps them. Runs on disk keep
 everything; they never leave the machine unless the user shares a report.
 
 ## 14. Testing
@@ -370,12 +377,13 @@ everything; they never leave the machine unless the user shares a report.
   sysfs trees from real machines (Linux laptop with NVMe and a USB SSD, an Apple silicon Mac, a Windows
   desktop), stored as fixtures; store finders against fake folder trees; advice rules against runs made
   with `FakeProbe`; the API and dashboard against a fake run.
-- **Integration** (default suite): a tiny benchmark (64 MiB) on the test machine's temporary folder,
-  checking the shape of the result, the cache-bypass flag and that the file is gone; never a speed.
+- **Small benchmarks** (default suite, `tests/unit/test_benchmark.py` and the acceptance cases): 32–64 MiB
+  on the test machine's temporary folder, checking the shape of the result, the cache-bypass flag and
+  that the file is gone; never a speed.
 - **CI** runs the default suite on Ubuntu, macOS and Windows runners (design goal: three systems).
 - **Bench** (`-m bench`, not in the default suite): full-size benchmarks on real drives, run by hand
   through `scripts/gpu-lock.sh`, since a 4 GiB write would disturb another project's model run on the same
-  machine (decision D-006).
+  machine (decision D-006). None are written yet: the marker is reserved for them.
 
 ## 15. Guarantees (acceptance cases)
 
@@ -397,7 +405,8 @@ everything; they never leave the machine unless the user shares a report.
 10. A load-time estimate for an item uses the measured read of its volume and is labelled "disk time
     only"; without a measurement it uses the link's expected speed and says so.
 11. Advice never runs a command; every advice item has its rule, why with measurement ids, and commands
-    for the current OS.
+    for the current OS when it asks the user to act (`warn`, `suggest`); an `info` item may only inform
+    (decision D-021).
 12. Two different-format copies of one model (GGUF and safetensors) are never reported as duplicates;
     byte-identical files in two stores are.
 13. A report removes serials, UUIDs, user name, home path and host name unless `--keep-private` is given.
