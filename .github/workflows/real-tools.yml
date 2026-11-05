@@ -59,7 +59,9 @@ jobs:
           ollama serve > "$RUNNER_TEMP/s.log" 2>&1 &
           sleep 5; ollama --version; ollama pull all-minilm:22m; ollama cp all-minilm:22m foo/bar:baz
           find "$RUNNER_TEMP/m" -maxdepth 7 | grep -v "/blobs/"
-          for f in $(find "$RUNNER_TEMP/m" -type f -not -path "*/blobs/*"); do echo "== $f"; head -c 600 "$f"; echo; done
+          ls -laR "$RUNNER_TEMP/m/manifests-v2"
+          for f in $(find "$RUNNER_TEMP/m/manifests-v2" -mindepth 4); do echo "== $f"; file "$f"; readlink "$f"; [ -f "$f" ] && head -c 300 "$f"; echo; done
+          ollama rm foo/bar:baz; ls -laR "$RUNNER_TEMP/m/manifests-v2" "$RUNNER_TEMP/m/manifests"; ls "$RUNNER_TEMP/m/blobs"
           curl -s http://127.0.0.1:11600/api/tags
       - name: An exFAT drive
         run: |
