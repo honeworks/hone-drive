@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -26,23 +27,75 @@ KB = 1000
 
 @dataclass
 class FakeOllama:
-    """Answers `/api/ps` with what is loaded and records the deletes it is asked for."""
+    """Answers `/api/ps` with what is loaded and records the deletes it is asked for. With `running`, it
+    also answers `/api/version` and does what Ollama does for a pull from a registry, a copy and a delete
+    in `models`, so the shelf's way back through Ollama's server (decision D-024) is tested end to end."""
 
     loaded: list[str] = field(default_factory=list[str])
     deleted: list[str] = field(default_factory=list[str])
     comfyui_running: bool = False
+    running: bool = False
+    models: Path | None = None
 
     def fetch(self, url: str) -> bytes | None:
         if url.endswith("/api/ps"):
             return json.dumps({"models": [{"name": n, "model": n} for n in self.loaded]}).encode()
         if url.endswith("/system_stats") and self.comfyui_running:
             return b"{}"
+        if url.endswith("/api/version") and self.running:
+            return b'{"version": "fake"}'
         return None
 
     def send(self, method: str, url: str, body: dict[str, object] | None) -> bytes | None:
-        if method == "DELETE" and url.endswith("/api/delete") and body:
+        body = body or {}
+        if method == "DELETE" and url.endswith("/api/delete"):
             self.deleted.append(str(body["model"]))
+            if self.running and self.models:
+                manifest_path(self.models, str(body["model"])).unlink(missing_ok=True)
+        elif url.endswith("/api/pull") and self.models:
+            self._pull(str(body["model"]))
+        elif url.endswith("/api/copy") and self.models:
+            target = manifest_path(self.models, str(body["destination"]))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(manifest_path(self.models, str(body["source"])).read_bytes())
         return b"{}"
+
+    def _pull(self, name: str) -> None:
+        assert self.models is not None
+        host, rest = name.split("/", 1)
+        repo, tag = rest.rsplit(":", 1)
+        with urllib.request.urlopen(f"http://{host}/v2/{repo}/manifests/{tag}") as response:
+            raw = response.read()
+        data = json.loads(raw)
+        for layer in [data["config"], *data["layers"]]:
+            digest = str(layer["digest"])
+            head = urllib.request.Request(f"http://{host}/v2/{repo}/blobs/{digest}", method="HEAD")
+            with urllib.request.urlopen(head) as response:  # noqa: S310
+                size = int(response.headers["Content-Length"])
+            parts = b""
+            step = size // 3 + 1
+            for start in range(0, size, step):  # in three ranges, as Ollama downloads big blobs in parts
+                ask = urllib.request.Request(f"http://{host}/v2/{repo}/blobs/{digest}")
+                ask.add_header("Range", f"bytes={start}-{min(start + step - 1, size - 1)}")
+                with urllib.request.urlopen(ask) as response:  # noqa: S310
+                    parts += response.read()
+            assert hashlib.sha256(parts).hexdigest() == digest.split(":")[1], "a blob came back wrong"
+            (self.models / "blobs").mkdir(parents=True, exist_ok=True)
+            (self.models / "blobs" / digest.replace(":", "-")).write_bytes(parts)
+        target = manifest_path(self.models, name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+
+
+def manifest_path(models: Path, name: str) -> Path:
+    """Where Ollama keeps a name's manifest: `gemma:31b` is registry.ollama.ai/library/gemma/31b."""
+    repo, tag = name.rsplit(":", 1)
+    parts = repo.split("/")
+    if len(parts) == 1:
+        parts = ["registry.ollama.ai", "library", *parts]
+    elif len(parts) == 2:
+        parts = ["registry.ollama.ai", *parts]
+    return models.joinpath("manifests", *parts, tag)
 
 
 @dataclass
@@ -111,13 +164,14 @@ def attach(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Machine:
     )
     monkeypatch.setattr(stores, "MODEL_FILE_MIN", KB)
     home, drive = tmp_path / "home", tmp_path / "drive"
-    fake = FakeOllama()
+    fake = FakeOllama(models=home / ".ollama" / "models")
     ctx = Context(
         os_name="linux", home=str(home), env={"HOME": str(home)}, run=FakeRunner(), fetch=fake.fetch,
         send=fake.send,
     )  # fmt: skip
     monkeypatch.setattr(shelf, "context", lambda _run: ctx)
     monkeypatch.setattr("hone_drive.shelf_move.context", lambda _run: ctx)
+    monkeypatch.setattr("hone_drive.shelf_restore.context", lambda _run: ctx)
     monkeypatch.setattr("hone_drive.shelf_move.look", Busy)
     return Machine(home, drive, fake, ctx)
 

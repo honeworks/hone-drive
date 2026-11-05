@@ -16,6 +16,7 @@ from hone_drive import access, text
 from hone_drive import shelf_catalog as catalog
 from hone_drive.errors import NotFound, ShelfDamaged, ShelfRefused, Stopped
 from hone_drive.model import Run, Volume
+from hone_drive.ollama_server import answers
 from hone_drive.presentation import volume_names
 from hone_drive.shelf_busy import Busy, in_use, look
 from hone_drive.shelf_catalog import Shelf, ShelfFile, ShelfLink, ShelfModel
@@ -143,17 +144,24 @@ def _not_here(key: str, shelf: Shelf | None) -> Planned:
     return Planned(key, [key], key.split(":", maxsplit=1)[0], 0, refused="not on this computer")
 
 
+def needs_write(tool: str, ctx: Context) -> bool:
+    """Ollama's server removes and takes back its own models when it runs (decision D-024): then reading
+    its folder is enough. Every other tool's files are changed by hone-drive."""
+    return tool != "ollama" or not answers(ctx)
+
+
 def _refusal(
     model: LocalModel, volume: Volume, ctx: Context, opened: Busy, drive: access.Access
 ) -> tuple[str | None, list[str]]:
     if not drive.ok:
         return f"hone-drive can't write on this drive: {drive.problems[0]}", drive.fix
+    write = needs_write(model.tool, ctx)
     if not model.readable:
-        found = access.check([model.root], [], ctx.os_name)
+        found = access.check([model.root], [], ctx.os_name, write=write)
         return f"hone-drive can't read {model.tool}'s folder yet", found.fix
     if (reason := in_use(model, ctx, opened)) is not None:
         return reason, []
-    found = access.check(model.folders(), [model.path(r) for r in model.files], ctx.os_name)
+    found = access.check(model.folders(), [model.path(r) for r in model.files], ctx.os_name, write=write)
     if not found.ok:
         return found.problems[0], found.fix
     traits = volume.traits

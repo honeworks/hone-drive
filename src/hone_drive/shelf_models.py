@@ -11,6 +11,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from hone_drive.errors import ShelfRefused
 from hone_drive.model import Item, Run, Store
 from hone_drive.store_ollama import server
 from hone_drive.stores import Context
@@ -142,19 +143,23 @@ def remove_local(model: LocalModel, ctx: Context) -> None:
 
 
 def _remove_ollama(model: LocalModel, ctx: Context) -> None:
-    for name in model.names:
-        ctx.send("DELETE", f"{server(ctx.env)}/api/delete", {"model": name})
+    answered = [ctx.send("DELETE", f"{server(ctx.env)}/api/delete", {"model": n}) for n in model.names]
+    gone: tuple[type[OSError], ...] = (FileNotFoundError,)
+    if all(a is not None for a in answered):
+        gone = (FileNotFoundError, PermissionError)  # Ollama removed them; its folder may be read-only to us
     manifests = [rel for rel in model.files if rel.startswith("manifests/")]
     for rel in manifests:  # the server may not be running: then hone-drive removes them itself
-        with contextlib.suppress(FileNotFoundError):
+        with contextlib.suppress(*gone):
             os.remove(model.path(rel))
     still = listed_blobs(model.root)
     for rel in model.files:
         if rel.startswith("blobs/") and rel not in still:
-            with contextlib.suppress(FileNotFoundError):
+            with contextlib.suppress(*gone):
                 os.remove(model.path(rel))
     for rel in manifests:
         _prune_empty(os.path.dirname(model.path(rel)), stop=os.path.join(model.root, "manifests"))
+    if any(os.path.exists(model.path(rel)) for rel in manifests):
+        raise ShelfRefused(f"Ollama did not remove {model.names[0]}; it is on the drive and still here")
 
 
 def listed_blobs(models: str) -> set[str]:

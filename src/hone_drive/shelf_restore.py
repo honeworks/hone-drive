@@ -12,9 +12,11 @@ from hone_drive import access, text
 from hone_drive import shelf_catalog as catalog
 from hone_drive.errors import NotFound, ShelfDamaged, Stopped
 from hone_drive.model import Run
+from hone_drive.ollama_server import answers, run_import
 from hone_drive.shelf_catalog import Shelf, ShelfFile, ShelfModel
 from hone_drive.shelf_copy import copy_checked, mtime_ns, read_back_cache, sha256_of, unchanged
-from hone_drive.shelf_move import MARGIN, Options, Plan, Planned, Result, Tick, refusals
+from hone_drive.shelf_move import MARGIN, Options, Plan, Planned, Result, Tick, context, refusals
+from hone_drive.stores import Context
 from hone_drive.volumes import mount_of
 
 
@@ -52,8 +54,11 @@ def find(run: Run, key: str, drive: str | None = None) -> OnDrive:
 # -- bringing back -----------------------------------------------------------------------------------------
 
 
-def plan_restore(run: Run, keys: list[str], drive: str | None = None) -> list[Plan]:
+def plan_restore(
+    run: Run, keys: list[str], drive: str | None = None, ctx: Context | None = None
+) -> list[Plan]:
     """What `restore()` would do, one plan per drive; nothing changes."""
+    ctx = ctx or context(run)
     plans: dict[str, Plan] = {}
     for key in keys:
         found = find(run, key, drive)
@@ -61,7 +66,7 @@ def plan_restore(run: Run, keys: list[str], drive: str | None = None) -> list[Pl
         mount = found.mount or ""
         the_plan = plans.setdefault(found.shelf.drive, Plan("restore", mount, found.shelf.name, []))
         item = Planned(key, entry.names, entry.tool, sum(f.bytes for f in entry.files))
-        item.refused, item.fix = _restore_refusal(run, found, entry)
+        item.refused, item.fix = _restore_refusal(run, found, entry, ctx)
         if item.refused is None:
             item.copy_bytes = sum(f.bytes for f in entry.files if not _on_computer(entry, f))
             local = mount_of(entry.root, [v.mount for v in run.volumes]) or entry.root
@@ -71,15 +76,20 @@ def plan_restore(run: Run, keys: list[str], drive: str | None = None) -> list[Pl
     return list(plans.values())
 
 
-def _restore_refusal(run: Run, found: OnDrive, entry: ShelfModel) -> tuple[str | None, list[str]]:
+def _restore_refusal(
+    run: Run, found: OnDrive, entry: ShelfModel, ctx: Context
+) -> tuple[str | None, list[str]]:
     if found.mount is None:
         return f"plug in {found.shelf.name} to bring it back", []
     if not entry.complete:
         return f"the copy on {found.shelf.name} is not complete; move it to the drive again first", []
-    folders = sorted({os.path.dirname(_local(entry, f.rel)) for f in entry.files} | {entry.root})
-    checked = access.check(folders, [], run.machine.os)
-    if not checked.ok:
-        return checked.problems[0], checked.fix
+    if via_server(entry, run.machine.os):
+        if not answers(ctx):
+            return "start Ollama: its folder isn't writable, so Ollama takes the model back itself", []
+    else:
+        checked = access.check(_folders(entry), [], run.machine.os)
+        if not checked.ok:
+            return checked.problems[0], checked.fix
     for f in entry.files:
         path = _local(entry, f.rel)
         if os.path.exists(path) and not _on_computer(entry, f):
@@ -87,9 +97,11 @@ def _restore_refusal(run: Run, found: OnDrive, entry: ShelfModel) -> tuple[str |
     return None, []
 
 
-def restore(run: Run, plans: list[Plan], options: Options | None = None) -> Result:
+def restore(
+    run: Run, plans: list[Plan], options: Options | None = None, ctx: Context | None = None
+) -> Result:
     """Copy each planned model back to where it was, checked against the catalog's SHA-256."""
-    options = options or Options()
+    options, ctx = options or Options(), ctx or context(run)
     result = Result(failed=refusals(plans))
     for the_plan in plans:
         if not the_plan.ready:
@@ -100,7 +112,11 @@ def restore(run: Run, plans: list[Plan], options: Options | None = None) -> Resu
                 raise NotFound(f"{the_plan.drive} has no shelf at {the_plan.mount}")
             for item in the_plan.ready:
                 try:
-                    _restore_one(shelf, shelf.models[item.key], options)
+                    entry = shelf.models[item.key]
+                    if via_server(entry, run.machine.os):
+                        _through_ollama(shelf, entry, ctx)
+                    else:
+                        _restore_one(shelf, entry, options)
                 except Stopped:
                     result.stopped = True
                     return result
@@ -132,6 +148,32 @@ def _restore_one(shelf: Shelf, entry: ShelfModel, options: Options) -> None:
         path = _local(entry, link.rel)
         if not os.path.lexists(path):
             _link(path, link.target)
+
+
+VIA_SERVER: str = "auto"  # "always": the tests' way to take the server's path on a folder they could write
+
+
+def via_server(entry: ShelfModel, os_name: str) -> bool:
+    """Ollama takes the model back itself when this user can read its folder but not write it."""
+    if entry.tool != "ollama":
+        return False
+    return VIA_SERVER == "always" or not access.check(_folders(entry), [], os_name).ok
+
+
+def _folders(entry: ShelfModel) -> list[str]:
+    return sorted({os.path.dirname(_local(entry, f.rel)) for f in entry.files} | {entry.root})
+
+
+def _through_ollama(shelf: Shelf, entry: ShelfModel, ctx: Context) -> None:
+    """Ollama pulls the drive's copy from hone-drive and checks every blob; then the manifest it wrote
+    must be the catalog's, byte for byte."""
+    if not all(_on_computer(entry, f) for f in entry.files):
+        run_import(entry, shelf.mount, ctx)
+    for f in entry.files:
+        path = _local(entry, f.rel)
+        if f.rel.startswith("manifests/") and not _on_computer(entry, f):
+            raise ShelfDamaged(f"Ollama wrote {path} differently from the copy on {shelf.name}")
+        f.local_ns = mtime_ns(path) if os.path.exists(path) else None
 
 
 def _link(path: str, target: str) -> None:

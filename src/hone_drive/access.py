@@ -19,6 +19,7 @@ from typing import Any
 Which = Callable[[str], str | None]
 PROBE = ".hone-drive-check-"
 ACL_PACKAGE = {"pacman": "sudo pacman -S acl", "apt": "sudo apt install acl", "dnf": "sudo dnf install acl"}
+MAC_READ = "read,list,search,readattr,readextattr,file_inherit,directory_inherit"
 MAC_RIGHTS = (
     "read,write,delete,add_file,add_subdirectory,list,search,readattr,writeattr,readextattr,writeextattr,"
     "file_inherit,directory_inherit"
@@ -39,14 +40,18 @@ def check(
     *,
     user: str | None = None,
     which: Which = shutil.which,
+    write: bool = True,
 ) -> Access:
-    """Try to list, read and write in `folders` and to read `files`; the fix for this system when it fails.
-    A folder that does not exist yet must be creatable in its nearest existing parent."""
+    """Try to list, read and (with `write`) write in `folders` and to read `files`; the fix for this system
+    when it fails. A folder that does not exist yet must be creatable in its nearest existing parent."""
     problems: list[str] = []
     locked: list[str] = []
     for path in folders:
         existing = _existing(path)
-        if not _can_write(existing):
+        if not write and not os.access(existing, os.R_OK | os.X_OK):
+            problems.append(f"can't read {existing}")
+            locked.append(_outermost_locked(existing))
+        elif write and not _can_write(existing):
             problems.append(f"can't change files in {existing}")
             locked.append(_outermost_locked(existing))
     for path in files:
@@ -57,19 +62,24 @@ def check(
         return Access(ok=True)
     problems = list(dict.fromkeys(problems))  # several folders inside one locked folder say it once
     top = min(locked, key=len)
-    return Access(ok=False, problems=problems, fix=fix_for(top, os_name, user or getpass.getuser(), which))
+    fix = fix_for(top, os_name, user or getpass.getuser(), which, write)
+    return Access(ok=False, problems=problems, fix=fix)
 
 
-def fix_for(top: str, os_name: str, user: str, which: Which = shutil.which) -> list[str]:
-    """The command that lets `user` read and write `top`, also files added there later, on this system."""
+def fix_for(top: str, os_name: str, user: str, which: Which = shutil.which, write: bool = True) -> list[str]:
+    """The command that lets `user` read (and with `write`, change) `top`, also files added there later, on
+    this system."""
     if os_name == "windows":
-        return [f'icacls "{top}" /grant "{user}:(OI)(CI)M" /T   # in an administrator PowerShell']
+        rights = "M" if write else "RX"
+        return [f'icacls "{top}" /grant "{user}:(OI)(CI){rights}" /T   # in an administrator PowerShell']
     if os_name == "macos":
-        return [f'sudo chmod -R +a "user:{user} allow {MAC_RIGHTS}" "{top}"']
+        return [f'sudo chmod -R +a "user:{user} allow {MAC_RIGHTS if write else MAC_READ}" "{top}"']
     owner = owner_of(top)
+    mode = "rwX" if write else "rX"
     if owner == user:
-        return [f'chmod -R u+rwX "{top}"']
-    acl = f"sudo setfacl -R -m u:{user}:rwX,d:u:{user}:rwX" + (f",d:u:{owner}:rwX" if owner else "")
+        return [f'chmod -R u+{mode} "{top}"']
+    keep = f",d:u:{owner}:rwX" if owner and write else ""  # the owner keeps reading files written for it
+    acl = f"sudo setfacl -R -m u:{user}:{mode},d:u:{user}:{mode}{keep}"
     lines = [f'{acl} "{top}"', f'# to undo it: sudo setfacl -R -x u:{user},d:u:{user} "{top}"']
     if which("setfacl") is None:
         install = next((cmd for tool, cmd in ACL_PACKAGE.items() if which(tool)), "install the acl package")

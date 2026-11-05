@@ -237,3 +237,20 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   real processes, and with the real tools wherever a runner has them.
 - **Status:** follows change 0003, at the owner's request.
 
+## D-024: Ollama's service folder is read, and Ollama takes models back itself  (2026-11-05)
+
+- **Question:** on the CI runner set up like the reference machine (Ollama as a service of its own user),
+  bringing a model back failed: "can't change files in .../models/manifests". Ollama makes its folders
+  with mode 0755, and a POSIX ACL's mask then limits any rule for another user to reading, in every folder
+  Ollama makes after the fix was run. No permission rule can let another user write there for good.
+- **Choice:** with Ollama running, hone-drive asks only to read its folder (the fix is `rX`). Ollama's
+  server removes models (`DELETE /api/delete`), and takes them back: hone-drive serves the drive's copy
+  as a minimal registry on 127.0.0.1 for one pull (manifest by tag; blobs with ranges, sent through a
+  redirect to `localhost`, as registries send blobs from another host), Ollama pulls it under a temporary
+  name, copies it to each original name and deletes the temporary one. The manifest Ollama then holds is
+  checked against the catalog byte for byte; Ollama checks every blob's SHA-256 itself. Where hone-drive
+  may write the folder (macOS, Windows, a user's own Ollama), files are copied directly as before.
+- **Why:** it needs less access (read, not write), works for every model Ollama ever adds, and the model
+  comes back exactly as it left. Tested with the real Ollama, both ways back, on the reference machine.
+- **Status:** follows change 0003; found by the "Real tools" workflow the owner asked for.
+

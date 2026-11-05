@@ -51,7 +51,8 @@ src/hone_drive/
                          shelf_restore.py (restore, remove, verify, contents), shelf_models.py (a model
                          per tool, leaving the computer), shelf_busy.py (in use), shelf_catalog.py (the
                          catalog on the drive), shelf_copy.py (copy and prove), access.py (the check, its
-                         fix per OS, and Windows' file-in-use test)
+                         fix per OS, and Windows' file-in-use test),
+                         ollama_server.py (Ollama takes a model back from a one-pull local registry)
   runs.py                runs on disk;  text.py: sizes and speeds for people
   cli.py  cli_shelf.py   the command line;  `hone-drive shelf ...`
   testing.py             FakeProbe, recorded machines, record(), check_probe()

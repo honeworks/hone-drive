@@ -16,7 +16,8 @@ design changed is in [`design/changes/`](design/changes/).
   this user access to a tool's folder on this system (Ollama's service folder on Linux). Works with
   Ollama, ComfyUI, Hugging Face, LM Studio, llama.cpp and your own folders. A model counts as in use when
   a program has it open or mapped into memory, when ComfyUI runs from its install on any port, or (on
-  Windows) when another program holds the file. Guarantees AC17 to AC26, tested with the real Ollama and
+  Windows) when another program holds the file. For Ollama's service on Linux it needs only to read its folder:
+  Ollama removes models and takes them back itself, pulling the drive's copy from hone-drive. Guarantees AC17 to AC26, tested with the real Ollama and
   Hugging Face on Linux, macOS and Windows (the "Real tools" workflow).
 
 ### Changed

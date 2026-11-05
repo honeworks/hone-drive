@@ -261,6 +261,11 @@ def test_the_fix_is_built_for_this_system(monkeypatch: pytest.MonkeyPatch) -> No
     assert access.fix_for("/x", "linux", "bahman") == ['chmod -R u+rwX "/x"']
     assert access.fix_for("/x", "macos", "me")[0].startswith('sudo chmod -R +a "user:me allow read,write')
     assert access.fix_for("C:\\m", "windows", "me")[0].startswith('icacls "C:\\m" /grant "me:(OI)(CI)M" /T')
+    monkeypatch.setattr(access, "owner_of", lambda _p: "ollama")
+    read = access.fix_for("/usr/share/ollama", "linux", "bahman", tools.get, write=False)
+    assert read[0] == 'sudo setfacl -R -m u:bahman:rX,d:u:bahman:rX "/usr/share/ollama"'  # reading only
+    assert "RX" in access.fix_for("C:\\m", "windows", "me", write=False)[0]
+    assert "allow read,list" in access.fix_for("/m", "macos", "me", write=False)[0]
 
 
 def test_ollama_sized_by_its_server_needs_the_fix_first(machine: Machine) -> None:
@@ -282,3 +287,32 @@ def test_refusals_are_reported_with_the_result(machine: Machine) -> None:
     run = machine.run()
     refused = shelf.move(run, shelf.plan(run, [GEMMA], to=str(machine.drive)))
     assert "loaded" in refused.failed[GEMMA]
+
+
+def test_ollama_takes_a_model_back_itself_when_its_folder_is_read_only(
+    machine: Machine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decision D-024: Ollama's service makes its folders 0755, so another user can't write into them;
+    hone-drive serves the drive's copy as a registry and Ollama pulls, copies and drops the temporary name."""
+    machine.ollama.running = True
+    move(machine, GEMMA)
+    manifest = machine.models / "manifests" / "registry.ollama.ai" / "library" / "gemma" / "31b"
+    assert not manifest.exists()
+    monkeypatch.setattr(shelf_restore, "VIA_SERVER", "always")
+    result = shelf.restore(machine.run(), [GEMMA])
+    assert result.done == [GEMMA], result
+    assert manifest.exists() and machine.ollama.deleted[-1].startswith("127.0.0.1:")  # the temporary name
+    temporary = [
+        p for p in (machine.models / "manifests").rglob("*") if p.is_file() and "127.0.0.1" in str(p)
+    ]
+    assert temporary == []
+    assert set(shelf.local_models(machine.run())) >= {GEMMA, TINY}
+
+
+def test_bringing_back_through_ollama_needs_it_running(
+    machine: Machine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    move(machine, GEMMA)
+    monkeypatch.setattr(shelf_restore, "VIA_SERVER", "always")
+    planned = shelf.plan_restore(machine.run(), [GEMMA])[0].models[0]
+    assert planned.refused and "start Ollama" in planned.refused

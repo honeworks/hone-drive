@@ -19,19 +19,38 @@ from hone_drive import access
 from hone_drive.access import Access
 from hone_drive.model import Run
 from hone_drive.shelf_models import TOOLS, key_of, local_models
-from hone_drive.shelf_move import Options, Plan, Planned, Result, Tick, context, move, plan, target
+from hone_drive.shelf_move import (
+    Options,
+    Plan,
+    Planned,
+    Result,
+    Tick,
+    context,
+    move,
+    needs_write,
+    plan,
+    target,
+)
 from hone_drive.shelf_restore import OnDrive, contents, find, plan_restore, remove, verify
 from hone_drive.shelf_restore import restore as restore_plans
+from hone_drive.stores import Context
 
 
-def restore(run: Run, keys: list[str], drive: str | None = None, options: Options | None = None) -> Result:
+def restore(
+    run: Run,
+    keys: list[str],
+    drive: str | None = None,
+    options: Options | None = None,
+    ctx: Context | None = None,
+) -> Result:
     """Bring `keys` back to where they were on the computer, checked; the drive keeps its copy."""
-    return restore_plans(run, plan_restore(run, keys, drive), options)
+    return restore_plans(run, plan_restore(run, keys, drive, ctx), options, ctx)
 
 
 def check(run: Run, tool: str) -> Access:
     """Whether hone-drive can read, write and remove `tool`'s model files on this machine, and the command
-    that fixes it here when it can't (it never runs it)."""
+    that fixes it here when it can't (it never runs it). For a running Ollama, reading is enough: its server
+    removes and takes back models itself."""
     folders: set[str] = set()
     for store in run.stores:
         if store.id == tool and store.path:
@@ -43,7 +62,7 @@ def check(run: Run, tool: str) -> Access:
             folders |= set(model.folders())
     if not folders:
         return Access(ok=True)
-    return access.check(sorted(folders), [], run.machine.os)
+    return access.check(sorted(folders), [], run.machine.os, write=needs_write(tool, context(run)))
 
 
 __all__ = [

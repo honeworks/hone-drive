@@ -27,7 +27,7 @@ from typing import Any
 
 import pytest
 
-from hone_drive import shelf
+from hone_drive import shelf, shelf_restore
 from hone_drive.model import Run
 from hone_drive.scanner import os_name
 from hone_drive.shelf_busy import Busy
@@ -137,7 +137,13 @@ def key_of(ollama: Ollama) -> tuple[str, str]:
     return name, f"ollama:{name}"
 
 
-def test_a_real_ollama_model_leaves_and_comes_back(ollama: Ollama) -> None:
+@pytest.mark.parametrize("route", ["auto", "always"])
+def test_a_real_ollama_model_leaves_and_comes_back(
+    ollama: Ollama, route: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`auto`: back through the files when the folder is writable, through Ollama's server when not (the
+    service's folder); `always`: through Ollama's server, which pulls from hone-drive's registry."""
+    monkeypatch.setattr(shelf_restore, "VIA_SERVER", route)
     before = ollama.listed()
     name, key = key_of(ollama)
     version = ollama.call("/api/version").get("version")
@@ -155,7 +161,7 @@ def test_a_real_ollama_model_leaves_and_comes_back(ollama: Ollama) -> None:
     assert name not in ollama.listed()  # Ollama itself no longer has it
     if ollama.models is not None:
         assert not list((ollama.models / "blobs").iterdir())  # and its blobs left the computer
-    restored = shelf.restore(ollama.run(), [key])
+    restored = shelf.restore(ollama.run(), [key], ctx=ollama.ctx)
     assert restored.done == [key], restored
     after = ollama.listed()
     assert name in after, (version, before, after)

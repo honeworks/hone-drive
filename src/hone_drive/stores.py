@@ -39,8 +39,10 @@ def http_send(method: str, url: str, body: dict[str, object] | None = None) -> b
         url, data=data, method=method, headers={"Content-Type": "application/json"}
     )
     try:
-        with urllib.request.urlopen(request, timeout=30.0) as response:  # noqa: S310 - local http only
+        with urllib.request.urlopen(request, timeout=3600.0) as response:  # noqa: S310 - local http only
             return bytes(response.read())
+    except urllib.error.HTTPError as error:  # the service answered with an error: say what it said
+        return bytes(error.read()) or json.dumps({"error": f"HTTP {error.code}"}).encode()
     except (urllib.error.URLError, OSError, ValueError):
         return None
 

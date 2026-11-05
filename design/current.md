@@ -525,6 +525,14 @@ are still listed. The catalog carries `format: 1`.
    Ollama through its server's `DELETE /api/delete` when it answers, and in any case the manifests and the
    blobs no remaining manifest lists; Hugging Face the repo folder; the others the file.
 
+**Ollama's service folder** (Linux): Ollama makes its folders with mode 0755, so no permission rule lets
+another user write into the ones it makes later. With Ollama running, hone-drive only needs to read its
+folder: Ollama's server removes a model (`DELETE /api/delete`), and takes one back itself: hone-drive
+serves the drive's copy as a registry on 127.0.0.1 for one pull, Ollama pulls it (checking every blob),
+copies it to its original names and drops the temporary name, and the manifest it wrote must match the
+catalog's byte for byte (decision D-024). Where the folder is this user's (macOS, Windows, a user's own
+Ollama), files are copied directly.
+
 **Bringing back** copies each file to its original place the same way, checked against the catalog's
 SHA-256 (a drive copy that doesn't match is reported damaged and nothing is written in place), Ollama's
 blobs before its manifests, Hugging Face's links last (a copy where the OS refuses links). It is refused
@@ -542,7 +550,8 @@ from what was found and shown, never run:
 
 | Found | Fix shown |
 |---|---|
-| Linux, the folder owned by another user (Ollama's service: `ollama`) | `sudo setfacl -R -m u:<user>:rwX,d:u:<user>:rwX,d:u:<owner>:rwX <folder>` (this user only, also files added later, and the owner keeps reading files brought back), with the line that undoes it; the `acl` package's install command first when `setfacl` is missing |
+| Linux, the folder owned by another user, for a running Ollama (its service: `ollama`) | `sudo setfacl -R -m u:<user>:rX,d:u:<user>:rX <folder>`: reading only, for this user only, also files added later, with the line that undoes it; the `acl` package's install command first when `setfacl` is missing |
+| Linux, another user's folder hone-drive must change (any other tool, or Ollama not running) | the same with `rwX`, and `d:u:<owner>:rwX` so the owner keeps reading what is written for it |
 | Linux, the folder this user's own but not writable | `chmod -R u+rwX <folder>` |
 | macOS | `sudo chmod -R +a "user:<user> allow read,write,delete,...,file_inherit,directory_inherit" <folder>` |
 | Windows | `icacls "<folder>" /grant "<user>:(OI)(CI)M" /T` in an administrator PowerShell |
