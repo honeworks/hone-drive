@@ -53,6 +53,7 @@ class Jobs:
     state: dict[str, Any] = field(default_factory=lambda: {"running": False, "kind": None, "message": ""})
     stop: threading.Event = field(default_factory=threading.Event)
     thread: threading.Thread | None = None
+    outcome: dict[str, Any] = field(default_factory=dict[str, Any])  # a shelf job's result, for the page
 
     def busy(self) -> bool:
         return self.thread is not None and self.thread.is_alive()
@@ -63,6 +64,12 @@ class Jobs:
     def start_bench(self, folders: list[str], tests: list[str], size: int) -> None:
         self._start("bench", lambda: self._bench(folders, tests, size))
 
+    def start_shelf(self, action: str, keys: list[str], **where: Any) -> None:
+        """`action`: move, restore or remove (change 0003); `where`: to, drive, only_copy, keep_local."""
+        if action not in ("move", "restore", "remove"):
+            raise ValueError(f"unknown shelf action {action!r}")
+        self._start("shelf", lambda: self._shelf(action, keys, **where))
+
     def request_stop(self) -> None:
         self.stop.set()
         self._say("stopping …")
@@ -71,6 +78,7 @@ class Jobs:
         if self.busy():
             raise HoneDriveError(f"a {self.state['kind']} is already running; wait for it or stop it")
         self.stop = threading.Event()
+        self.outcome = {}
         self.state = {"running": True, "kind": kind, "message": "starting"}
         self.hub.publish("job", dict(self.state))
 
@@ -79,7 +87,13 @@ class Jobs:
                 run = work()
                 run.advice = advise(run, self.home)
                 save_run(run)
-                self.state = {"running": False, "kind": kind, "message": "done", "run": run.id}
+                self.state = {
+                    "running": False,
+                    "kind": kind,
+                    "message": "done",
+                    "run": run.id,
+                    **self.outcome,
+                }
                 self.hub.publish("done", dict(self.state))
             except Exception as exc:  # reported to the page; the server keeps running
                 LOG.exception("%s failed", kind)
@@ -104,3 +118,29 @@ class Jobs:
             self.hub.publish("tick", asdict(t))
 
         return bench(run, folders, tests, Options(size=size, on_tick=tick, stop=self.stop))
+
+    def _shelf(
+        self,
+        action: str,
+        keys: list[str],
+        to: str | None = None,
+        drive: str | None = None,
+        only_copy: bool = False,
+        keep_local: bool = False,
+    ) -> Run:
+        from hone_drive import shelf  # noqa: PLC0415
+
+        run = self._scan(False, False)
+
+        def tick(t: shelf.Tick) -> None:
+            self.hub.publish("tick", {"test": t.action, "volume": t.model, "done": t.done, "total": t.total})
+
+        options = shelf.Options(stop=self.stop, on_tick=tick, keep_local=keep_local)
+        if action == "move":
+            result = shelf.move(run, shelf.plan(run, keys, to), options)
+        elif action == "restore":
+            result = shelf.restore(run, keys, drive, options)
+        else:
+            result = shelf.remove(run, keys, drive, only_copy)
+        self.outcome = {"result": asdict(result)}
+        return self._scan(False, False)  # what the action left, so the page shows it

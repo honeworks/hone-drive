@@ -70,7 +70,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         found = shelf.check(run, tool)
         _out(f"{tool}: " + ("ready" if found.ok else "; ".join(found.problems[:2])))
         for line in found.fix:
-            _out(f"    $ {line}")
+            _out(f"    {line}" if line.startswith("#") else f"    $ {line}")
         worst = worst or (0 if found.ok else 1)
     return worst
 
@@ -81,7 +81,7 @@ def _print_plan(the_plan: Plan) -> None:
         if item.refused:
             _out(f"✗ {item.key}: {item.refused}")
             for line in item.fix:
-                _out(f"    $ {line}")
+                _out(f"    {line}" if line.startswith("#") else f"    $ {line}")
         else:
             copy = f"copies {text.size(item.copy_bytes)}" if item.copy_bytes else "already there"
             _out(f"✓ {item.key}  {text.size(item.bytes)} {arrow} {the_plan.drive} ({copy})")

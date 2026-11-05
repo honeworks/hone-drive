@@ -3,6 +3,7 @@
 
 import { el, svg, size, speed, secs, pct, ago, tip, toast, api, icon, store, storeColor, storeOrder, seriesColor, ICONS } from "./ui.js";
 import { go, load, start } from "./app.js";
+import { selectionBar, placeChips, checkbox } from "./shelf.js";
 
 const SPEED_TEST = { tests: ["seq", "model"], size: "4G" };
 
@@ -291,13 +292,16 @@ function models(state) {
   let filter = "", only = null;
   const body = el("tbody");
   const maxLoad = Math.max(1, ...m.rows.flatMap((r) => Object.values(r.loads)));
+  const bar = el("div", {});
+  const redraw = () => { draw(); bar.replaceChildren(selectionBar(m.rows, state.view.shelf, redraw)); };
   const draw = () => {
     const rows = m.rows.filter((r) => (!only || r.store === only) && (!filter || r.names.join(" ").toLowerCase().includes(filter)));
-    body.replaceChildren(...rows.slice(0, 400).map((r) => el("tr", {},
+    body.replaceChildren(...rows.slice(0, 400).map((r) => el("tr", { class: r.on_computer ? "" : "away" }, checkbox(r, redraw),
       el("td", {}, el("div", { text: r.names[0] }), r.names.length > 1 ? el("div", { class: "small muted", text: `also ${r.names.slice(1).join(", ")}` }) : null,
         r.duplicate ? el("span", { class: "chip warn", text: "stored twice" }) : null,
         r.warm ? el("div", { class: "small muted", text: "fits in free memory: a second load may come from RAM, faster than shown" }) : null),
-      el("td", { class: "soft nowrap", text: r.store }), el("td", { class: "num", text: size(r.bytes) }), el("td", { class: "soft nowrap", text: r.where }),
+      el("td", { class: "soft nowrap", text: r.store }), el("td", { class: "num", text: size(r.bytes) }),
+      el("td", { class: "soft nowrap" }, el("div", { text: r.where }), ...placeChips(r)),
       ...m.columns.map((c) => {
         const s = r.loads[c.mount];
         if (s === undefined) return el("td", { class: "muted", text: "–" });
@@ -317,13 +321,14 @@ function models(state) {
     e.target.parentElement.querySelectorAll(".pill").forEach((p) => p.setAttribute("aria-pressed", String(p === e.target)));
     draw();
   } }));
-  draw();
+  redraw();
   const unmeasured = m.columns.filter((c) => !c.measured);
   return [pageTitle("Models", "Every model on this computer, and how long it takes to load from each drive. Loading is the only thing a slower drive changes: once loaded, a model runs just as fast."),
     unmeasured.length ? el("div", { class: "note", text: `Times for ${unmeasured.map((c) => c.name).join(" and ")} are estimates from the connection. Test their speed on the Drives screen for real numbers.` }) : null,
-    card(el("div", { class: "filters" }, search, el("div", { class: "row" }, ...pills), el("span", { class: "spacer" }), count),
+    el("div", { id: "shelf-panel" }),
+    card(bar, el("div", { class: "filters" }, search, el("div", { class: "row" }, ...pills), el("span", { class: "spacer" }), count),
       el("div", { class: "scroll", style: "margin-top:12px" }, el("table", { class: "data" },
-        el("thead", {}, el("tr", {}, ...["Model", "Tool", "Size", "Stored on"].map((h, i) => el("th", { class: i === 2 ? "num" : "", text: h })),
+        el("thead", {}, el("tr", {}, el("th", {}), ...["Model", "Tool", "Size", "Stored on"].map((h, i) => el("th", { class: i === 2 ? "num" : "", text: h })),
           ...m.columns.map((c) => el("th", { text: `Load time from ${c.name}` })))), body)))];
 }
 

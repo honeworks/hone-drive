@@ -86,12 +86,13 @@ pythonVersion = "3.11"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --strict-markers -m 'not bench'"
+addopts = "-ra --strict-markers -m 'not bench and not real'"
 timeout = 120
 markers = [
     "e2e: acceptance-case tests (run by default)",
     "bench: full-size benchmarks on real drives; run via scripts/gpu-lock.sh (design/decisions.md D-006)",
     "slow: slower than 5 s",
+    "real: the shelf with the real tools (Ollama); run by hand via scripts/gpu-lock.sh (change 0003)",
 ]
 
 [tool.coverage.run]

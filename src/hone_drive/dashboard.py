@@ -123,8 +123,11 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path.startswith("/runs/"):
             import psutil  # noqa: PLC0415 - imported where it is used, as in volumes.py
 
+            from hone_drive.shelf import contents  # noqa: PLC0415
+
             free_ram = int(psutil.virtual_memory().available)
-            return HTTPStatus.OK, run_view(load_run(path.removeprefix("/runs/")), home, free_ram)
+            run = load_run(path.removeprefix("/runs/"))
+            return HTTPStatus.OK, run_view(run, home, free_ram, contents(run))
         if method == "GET" and path == "/compare":
             return HTTPStatus.OK, compare_view(load_run(query["a"]), load_run(query.get("b", "latest")))
         if method == "GET" and path.startswith("/report/"):
@@ -146,11 +149,33 @@ class Handler(BaseHTTPRequestHandler):
             folders = [str(Path(str(f)).expanduser()) for f in body["folders"]]
             tests = [str(t) for t in body.get("tests", ["seq"])]
             jobs.start_bench(folders, tests, parse_size(str(body.get("size", "4G"))))
+        elif path == "/shelf/plan":
+            return HTTPStatus.OK, self._shelf_plan(body)
+        elif path.startswith("/shelf/"):
+            keys = [str(k) for k in body["models"]]
+            where = {k: body[k] for k in ("to", "drive", "only_copy", "keep_local") if k in body}
+            jobs.start_shelf(path.removeprefix("/shelf/"), keys, **where)
         elif path == "/stop":
             jobs.request_stop()
         else:
             raise NotFound(f"no API POST {path}")
         return HTTPStatus.ACCEPTED, jobs.state
+
+    def _shelf_plan(self, body: dict[str, Any]) -> dict[str, Any]:
+        """What a move or a restore would do, on a fresh scan; nothing changes (change 0003)."""
+        from dataclasses import asdict  # noqa: PLC0415
+
+        from hone_drive import shelf  # noqa: PLC0415
+
+        if self.app.jobs.busy():
+            raise HoneDriveError("wait for the running job to finish")
+        run = self.app.jobs.scanner()
+        keys = [str(k) for k in body["models"]]
+        if body.get("action") == "restore":
+            plans = shelf.plan_restore(run, keys, body.get("drive"))
+        else:
+            plans = [shelf.plan(run, keys, body.get("to"))]
+        return {"plans": [asdict(p) for p in plans]}
 
     def _body(self) -> dict[str, Any]:
         length = int(self.headers.get("Content-Length") or 0)

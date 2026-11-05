@@ -53,6 +53,7 @@ def check(
             locked.append(_outermost_locked(os.path.dirname(path)))
     if not problems:
         return Access(ok=True)
+    problems = list(dict.fromkeys(problems))  # several folders inside one locked folder say it once
     top = min(locked, key=len)
     return Access(ok=False, problems=problems, fix=fix_for(top, os_name, user or getpass.getuser(), which))
 

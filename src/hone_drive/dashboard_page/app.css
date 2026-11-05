@@ -233,3 +233,9 @@ h1, h2, .task-title, .what { overflow-wrap: anywhere; }
 .scroll { max-width: 100%; }
 .plan-row { display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; }
 .fact.cached .what { color: var(--muted); }
+.selection { padding: 2px 0 12px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.shelf-panel { margin-bottom: 16px; border-color: var(--accent); }
+.shelf-panel h2 { margin: 0 0 4px; }
+tr.away td { color: var(--muted); }
+.confirm-input { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--ring); background: var(--surface); color: var(--ink); margin-top: 10px; width: min(100%, 360px); }
+.btn.danger { background: var(--bad-ink); }
