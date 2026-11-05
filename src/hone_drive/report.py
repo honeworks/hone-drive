@@ -50,8 +50,10 @@ def redacted(run: Run, home: str | None = None) -> Run:
                 item["path"] = "<custom>"
     data["machine"]["hostname"] = "<host>"
     raw = json.dumps(data)
-    for root in _custom_roots(run, home):  # only where a path boundary follows: not /mnt/data2 for /mnt/data
-        raw = re.sub(re.escape(json.dumps(root)[1:-1]) + r'(?=[/"]|\\\\|$)', "<custom>", raw)
+    for root in _custom_roots(
+        run, home
+    ):  # not /mnt/data2 or /mnt/data.bak for /mnt/data; a full stop may end it
+        raw = re.sub(re.escape(json.dumps(root)[1:-1]) + r"(?![\w-]|\.[\w-])", "<custom>", raw)
     raw = raw.replace(json.dumps(home)[1:-1], "~")
     if len(user) > 2:
         raw = re.sub(rf"\b{re.escape(user)}\b", "<user>", raw)

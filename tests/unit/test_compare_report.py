@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+
+import pytest
+
 from hone_drive.compare import compare
 from hone_drive.model import Item, Measurement, Store
 from hone_drive.report import markdown, redacted, report
@@ -85,11 +89,21 @@ def test_report_hides_store_paths_outside_the_known_places() -> None:
     assert "projectx" in report(run, "json", keep_private=True, home="/home/user")
 
 
-def test_report_replaces_a_custom_root_only_at_a_path_boundary() -> None:
+@pytest.mark.parametrize(
+    ("root", "inside", "sibling"),
+    [("/mnt/data", "/mnt/data/hf", "/mnt/data2"), ("D:\\models", "D:\\models\\hf", "D:\\models.bak")],
+)
+def test_report_replaces_a_custom_root_only_at_a_path_boundary(root: str, inside: str, sibling: str) -> None:
+    """The root and paths inside it go, in paths and in sentences; a sibling sharing its prefix stays."""
     run = reference_run()
-    run.stores.append(Store(id="huggingface", title="hf", path="/mnt/data"))
-    run.stores.append(Store(id="custom", title="other", path="/home/user/x", items=[]))
-    run.accounting = []
-    run.volumes[1].mount = "/mnt/data2"  # a sibling that shares the prefix, not inside the root
-    text = report(run, "json", home="/home/user")
-    assert "<custom>2" not in text and "/mnt/data2" in text
+    run.stores.append(
+        Store(id="huggingface", title="hf", path=root, items=[Item(id="m", names=["m"], path=inside)])
+    )
+    run.machine.os_version = f"Move {root}, then {root}. Or {root}: see ({root})"
+    run.volumes[1].mount = sibling
+    raw = report(run, "json", home="/home/user")
+    data = json.loads(raw)
+    hf = next(s for s in data["stores"] if s["id"] == "huggingface")
+    assert hf["path"] == "<custom>" and hf["items"][0]["path"] == "<custom>" + inside[len(root) :]
+    assert data["machine"]["os_version"] == "Move <custom>, then <custom>. Or <custom>: see (<custom>)"
+    assert any(v["mount"] == sibling for v in data["volumes"])
