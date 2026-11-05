@@ -79,11 +79,13 @@ def fix_for(top: str, os_name: str, user: str, which: Which = shutil.which) -> l
 
 def owner_of(path: str) -> str | None:
     """The user name owning `path` (POSIX); None when the OS can't say."""
+    if sys.platform == "win32":
+        return None
     try:
         import pwd  # noqa: PLC0415 - POSIX only
 
         return pwd.getpwuid(os.stat(path).st_uid).pw_name
-    except (ImportError, KeyError, OSError):
+    except (KeyError, OSError):
         return None
 
 

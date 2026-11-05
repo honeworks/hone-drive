@@ -13,6 +13,7 @@ brings it back, and checks Ollama lists it with the same digest and answers with
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -120,6 +121,17 @@ def system(drive: Path) -> Ollama:
     return Ollama(url, ctx, machine([home], drive, {"ollama": find_ollama}, ctx), drive, None)
 
 
+def manifests(ollama: Ollama) -> dict[str, str]:
+    """Each manifest file and its SHA-256 (what Ollama's digest is computed from), to show a mismatch."""
+    root = ollama.models or Path(next(s.path for s in ollama.run().stores if s.id == "ollama" and s.path))
+    found = (root / "manifests").rglob("*") if (root / "manifests").is_dir() else []
+    return {
+        str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()[:12]
+        for p in found
+        if p.is_file()
+    }
+
+
 def key_of(ollama: Ollama) -> tuple[str, str]:
     name = next(n for n in ollama.listed() if n.startswith(MODEL.split(":")[0]))
     return name, f"ollama:{name}"
@@ -128,11 +140,13 @@ def key_of(ollama: Ollama) -> tuple[str, str]:
 def test_a_real_ollama_model_leaves_and_comes_back(ollama: Ollama) -> None:
     before = ollama.listed()
     name, key = key_of(ollama)
+    version = ollama.call("/api/version").get("version")
     access = shelf.check(ollama.run(), "ollama")
     if not access.ok:  # the service's own folder: what the reference machine needs
         assert access.fix and not access.ok
         run_fix(access.fix)
         assert shelf.check(ollama.run(), "ollama").ok, "the fix shown did not give access"
+    on_disk = manifests(ollama)
     the_run = ollama.run()
     the_plan = shelf.plan(the_run, [key], to=str(ollama.drive), ctx=ollama.ctx, busy=Busy)
     assert the_plan.models[0].refused is None, the_plan
@@ -141,7 +155,8 @@ def test_a_real_ollama_model_leaves_and_comes_back(ollama: Ollama) -> None:
     if ollama.models is not None:
         assert not list((ollama.models / "blobs").iterdir())  # and its blobs left the computer
     assert shelf.restore(ollama.run(), [key]).done == [key]
-    assert ollama.listed().get(name) == before[name]  # listed again with the same digest
+    after = ollama.listed()
+    assert after.get(name) == before[name], (version, before, after, on_disk, manifests(ollama))
     answer = ollama.call("/api/embed", {"model": name, "input": "hello", "keep_alive": 0})
     assert answer["embeddings"] and len(answer["embeddings"][0]) > 10
     assert shelf.remove(ollama.run(), [key]).done == [key]  # on the computer again: the drive may let go

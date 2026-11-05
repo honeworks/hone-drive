@@ -42,8 +42,9 @@ def look() -> Busy:
         found.comfyui |= _main_py(info)
         with contextlib.suppress(psutil.Error, OSError):
             found.files |= {os.path.realpath(f.path) for f in proc.open_files()}
-        with contextlib.suppress(psutil.Error, OSError, NotImplementedError):
-            found.files |= {os.path.realpath(m.path) for m in proc.memory_maps(grouped=True) if m.path}
+        maps: Any = getattr(proc, "memory_maps", None)  # not on every OS psutil supports
+        with contextlib.suppress(psutil.Error, OSError, NotImplementedError, TypeError):
+            found.files |= {os.path.realpath(str(m.path)) for m in maps(grouped=True) if m.path}
     return found
 
 
