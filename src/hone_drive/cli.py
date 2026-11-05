@@ -69,8 +69,8 @@ def cmd_scan(args: argparse.Namespace) -> int:
         duplicates=args.duplicates,
         progress=progress,
     )
-    run = _with_history(found)
-    path = _finish(run)
+    run = with_history(found)
+    path = save_with_advice(run)
     if args.json:
         _out(run.model_dump_json(indent=1))
     else:
@@ -105,7 +105,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
     from hone_drive.scanner import Progress, scan  # noqa: PLC0415
 
     progress: Progress | None = None if args.json else (lambda message: _err(f"… {message}"))
-    run = load_run(args.run) if args.run else _with_history(scan(progress=progress))
+    run = load_run(args.run) if args.run else with_history(scan(progress=progress))
     folders: list[str] = args.paths or default_folders(run, str(Path.home()))
 
     def tick(t: Tick) -> None:
@@ -113,7 +113,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
     options = Options(size=parse_size(args.size), model_files=args.model, on_tick=None if args.json else tick)
     bench(run, folders, args.tests.split(","), options)
-    _finish(run)
+    save_with_advice(run)
     if args.json:
         _out(run.model_dump_json(indent=1))
         return 0
@@ -124,14 +124,14 @@ def cmd_bench(args: argparse.Namespace) -> int:
     return 0
 
 
-def _with_history(run: Run) -> Run:
+def with_history(run: Run) -> Run:
     """Keep the latest run's measurements of the volumes still here (benchmark.carry_over)."""
     from hone_drive.benchmark import carry_over  # noqa: PLC0415
 
     return carry_over(run, load_run("latest")) if list_runs() else run
 
 
-def _finish(run: Run) -> Path:
+def save_with_advice(run: Run) -> Path:
     from hone_drive.advice import advise  # noqa: PLC0415
 
     run.advice = advise(run, str(Path.home()))
@@ -253,6 +253,9 @@ def parser() -> argparse.ArgumentParser:
     dash.add_argument("--port", type=int, default=0, help="port on 127.0.0.1 (default: a free one)")
     dash.add_argument("--no-browser", action="store_true")
     dash.set_defaults(func=cmd_dashboard)
+    from hone_drive.cli_shelf import add_parser  # noqa: PLC0415 - the shelf's commands live in their module
+
+    add_parser(sub)
     show = sub.add_parser("show", help="show a stored run")
     show.add_argument("run", nargs="?", default="latest")
     show.add_argument("--json", action="store_true")

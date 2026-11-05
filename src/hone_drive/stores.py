@@ -5,6 +5,7 @@ unreadable and never counted as empty (design §5.2)."""
 
 from __future__ import annotations
 
+import json
 import os
 import time
 import urllib.error
@@ -31,6 +32,19 @@ def http_get(url: str) -> bytes | None:
         return None
 
 
+def http_send(method: str, url: str, body: dict[str, object] | None = None) -> bytes | None:
+    """A JSON request to a local service (Ollama's `DELETE /api/delete`); None when nothing answers."""
+    data = json.dumps(body).encode() if body is not None else None
+    request = urllib.request.Request(  # noqa: S310 - local http only
+        url, data=data, method=method, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30.0) as response:  # noqa: S310 - local http only
+            return bytes(response.read())
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+
+
 @dataclass
 class Context:
     os_name: str
@@ -39,6 +53,7 @@ class Context:
     run: Runner = field(default_factory=SubprocessRunner)
     files: Files = field(default_factory=LocalFiles)
     fetch: Callable[[str], bytes | None] = http_get
+    send: Callable[[str, str, dict[str, object] | None], bytes | None] = http_send
     extra: list[str] = field(default_factory=list[str])  # folders the user added (`--add`)
     time_limit: float = STORE_TIME_LIMIT_S
 

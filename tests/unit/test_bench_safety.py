@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import socket
 from pathlib import Path
 
 import pytest
@@ -42,11 +43,14 @@ def test_ledger_survives_a_broken_file(data_home: Path) -> None:
 
 def test_one_benchmark_per_machine(data_home: Path) -> None:
     with safety.machine_lock():
-        assert (data_home / "bench.lock").read_text() == str(os.getpid())
+        assert (data_home / "bench.lock").read_text() == f"{socket.gethostname()} {os.getpid()}"
     assert not (data_home / "bench.lock").exists()
     (data_home / "bench.lock").write_text("999999999")  # a process that is gone
     with safety.machine_lock():
         pass
     (data_home / "bench.lock").write_text(str(os.getppid()))  # our parent is running
     with pytest.raises(BenchmarkBusy), safety.machine_lock():
+        pass
+    (data_home / "bench.lock").write_text("another-computer 1")  # a lock on a shared drive
+    with pytest.raises(BenchmarkBusy, match="another computer"), safety.machine_lock():
         pass

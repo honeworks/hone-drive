@@ -136,11 +136,15 @@ def _orphans(models: str, referenced: set[str]) -> int:
     return total
 
 
-def _from_api(ctx: Context) -> Store | None:
-    host = ctx.env.get("OLLAMA_HOST", "127.0.0.1:11434")
+def server(env: dict[str, str]) -> str:
+    """The local Ollama server's address (`OLLAMA_HOST`, default 127.0.0.1:11434), without a slash."""
+    host = env.get("OLLAMA_HOST", "127.0.0.1:11434")
     host = host if host.startswith("http") else f"http://{host}"
-    host = host.replace("://0.0.0.0", "://127.0.0.1")
-    raw = ctx.fetch(f"{host.rstrip('/')}/api/tags")
+    return host.replace("://0.0.0.0", "://127.0.0.1").rstrip("/")
+
+
+def _from_api(ctx: Context) -> Store | None:
+    raw = ctx.fetch(f"{server(ctx.env)}/api/tags")
     if raw is None:
         return None
     try:

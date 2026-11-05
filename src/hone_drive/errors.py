@@ -21,3 +21,19 @@ class BenchmarkBusy(HoneDriveError):
 
 class UnsupportedFormat(HoneDriveError):
     """A stored run written by a newer, incompatible version of hone-drive."""
+
+
+class ShelfRefused(HoneDriveError):
+    """A shelf action refused by the rules of change 0003: in use, no access, no room, the only copy."""
+
+
+class ShelfBusy(HoneDriveError):
+    """Another process (or computer) is changing this drive's shelf."""
+
+
+class ShelfDamaged(HoneDriveError):
+    """A copy whose bytes don't match its SHA-256: nothing was removed, the bad copy is not kept."""
+
+
+class Stopped(HoneDriveError):
+    """The user stopped a shelf job; what is complete stays, a `.part` file is removed."""
