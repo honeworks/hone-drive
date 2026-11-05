@@ -4,9 +4,10 @@
 
 **A storage dashboard for AI developers.** Find out what is filling your disks (Ollama, ComfyUI, Hugging
 Face, Docker, package caches), how fast each drive really is, how long your own models take to load from
-each one, and get a step-by-step plan, with the exact commands for your system, to free space and move
-models to an external SSD. Linux, macOS and Windows. Runs locally, works offline, needs no administrator
-rights, and never changes anything itself.
+each one, and get a step-by-step plan, with the exact commands for your system, to free space. Move the
+models you don't need now to an external SSD and bring them back when you do, with every copy checked
+byte for byte before anything is removed. Linux, macOS and Windows. Runs locally, works offline, needs no
+administrator rights, and changes nothing unless you ask it to.
 
 Part of **[honeworks](https://github.com/honeworks)**: small, standalone tools for reliable generative-AI
 workflows.
@@ -60,6 +61,12 @@ hone-drive answers them in a minute. The full story, with every measurement, is 
 - **Gives you a plan.** Ordered steps (clean caches, prepare the external drive, move model folders, get
   full speed), each with what it frees and the commands for your system to copy. hone-drive never runs
   them.
+- **Moves models to a drive and back.** Tick models on the Models screen and move them to your
+  external drive: each is copied, read back from the drive and compared with SHA-256, and only then
+  removed from your computer. Click "Bring back" when you need one again; the drive keeps its copy, so
+  moving it out again later takes a second. Works with Ollama, ComfyUI, Hugging Face, LM Studio,
+  llama.cpp and your own folders. A model that is loaded or open is left alone, and when hone-drive can't
+  reach a tool's folder (Ollama's service folder on Linux), it shows you the one command that fixes it.
 - **Keeps history and makes reports.** Compare two scans after changing a cable or freeing space. Share a
   report with serial numbers, user and computer names removed.
 
@@ -98,6 +105,11 @@ hone-drive scan                           # drives, connections, volumes and wha
 hone-drive scan --account --duplicates    # also find hidden space and duplicate files (slower)
 hone-drive bench --tests seq,model        # measure your home drive and every external drive
 hone-drive bench /mnt/models --size 8G    # measure one drive with a bigger test file
+hone-drive shelf                          # which models are on which drive, connected or not
+hone-drive shelf move gemma4:31b --dry-run   # what moving it would do; nothing changes
+hone-drive shelf move gemma4:31b          # copy to the external drive, check it, remove it here
+hone-drive shelf restore gemma4:31b       # bring it back (the drive keeps its copy)
+hone-drive shelf check                    # can hone-drive reach each tool's folder? the fix if not
 hone-drive advise                         # the plan, with commands for your system
 hone-drive compare 20261018T193558Z-b61168   # what changed since an earlier scan
 hone-drive report > report.md             # a report to share, private details removed
@@ -138,11 +150,14 @@ print(load_time(model, "/mnt/models", run))  # seconds, a range, and what it is 
 
 ## What it will never do
 
-- **Change anything.** It never moves, deletes, formats or mounts. Every command in the plan is for you
-  to read and run. The only file it writes outside its own data folder is the benchmark's temporary
-  file, which is removed afterwards; if the process is killed, the next run cleans it up.
+- **Change anything you didn't ask for.** It never formats or mounts, and the plan's commands are for
+  you to read and run. It moves models only when you click Move or Bring back, and removes a file only
+  after its copy was read back and matched byte for byte; a stop, a crash or a pulled cable leaves every
+  model whole in at least one place. Removing a model from the drive asks you to type its name when the
+  drive holds the only copy. Otherwise the only file it writes outside its own data folder is the
+  benchmark's temporary file, removed afterwards (if the process is killed, the next run cleans it up).
 - **Need administrator rights.** When a folder can't be read, it says so and shows the command that would
-  measure it. It never counts an unreadable folder as empty.
+  measure it, or the one that lets you move its models; it never runs either. It never counts an unreadable folder as empty.
 - **Guess.** A fact the operating system can't provide is shown as unknown, with the reason. Every speed
   is measured and labelled with how the cache was bypassed, or marked as an estimate with what it's
   based on.

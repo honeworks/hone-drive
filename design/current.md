@@ -2,7 +2,9 @@
 
 **Status:** accepted in [changes/0001](changes/0001-initial-design.md) on 2026-10-18; milestones M1 to M4
 built the same day. Verified on the Linux reference machine; the macOS and Windows probes and direct I/O
-are tested against hand-written fixtures and in CI, not yet on real Macs and PCs (decision D-012).
+are tested against hand-written fixtures and in CI, not yet on real Macs and PCs (decision D-012). The
+model shelf (§17) was accepted in [changes/0003](changes/0003-model-shelf.md) and built on 2026-11-05;
+checked with the real Ollama on the Linux reference machine.
 Section numbers are stable; code comments will refer to them ("design §6.2"). The evidence behind the
 defaults is in [history/0000-research.md](history/0000-research.md); smaller choices and the open
 questions are in [decisions.md](decisions.md).
@@ -24,13 +26,18 @@ storage. On Linux, macOS and Windows it:
 5. **advises**: ranked, checkable recommendations with their measured gain and the exact commands for
    this OS, which it shows but never runs (§8);
 6. **keeps** each run so two runs can be compared (after switching ports, after freeing space) and
-   exported as a report with private details removed (§9, §13).
+   exported as a report with private details removed (§9, §13);
+7. **shelves** models when the user asks: copies them to a drive, proves each copy byte for byte, and only
+   then removes them from the computer; brings them back the same way (§17, change
+   [0003](changes/0003-model-shelf.md)).
 
 ### Goals
 
 - Every number is measured on this machine or labelled as an estimate with its inputs.
-- Nothing is written outside hone-drive's own data folder and the benchmark's temporary file, which is
-  always removed; nothing needs administrator rights; nothing is moved, deleted or formatted.
+- Nothing changes unless the user starts it. Outside hone-drive's own data folder, it writes only the
+  benchmark's temporary file (always removed) and, when the user moves, brings back or removes models,
+  the model files and the shelf's catalog (§17), each step proven before the next. Nothing needs
+  administrator rights; nothing is formatted or mounted.
 - The same facts on all three operating systems, with "unknown, and why" where an OS can't tell.
 - Fast enough to open and glance at: the system scan finishes in seconds; long tests show progress and
   can be stopped.
@@ -39,15 +46,17 @@ storage. On Linux, macOS and Windows it:
 
 ### Non-goals (0.1)
 
-Moving, copying or deleting data; formatting, partitioning or mounting; raw block-device access; running
+Moving anything but models on the user's request (§17), deleting anything else; formatting, partitioning
+or mounting; raw block-device access; running
 as administrator; network drives; repairing drives; telemetry or any network access (the dashboard works
 offline); comparing results with other people's.
 
 ### Responsibilities
 
 hone-drive owns the facts about this machine's storage and their presentation: probes, store finders,
-benchmarks, estimates, advice rules, run history and the dashboard. It depends on no other honeworks
-package. Users own every action: hone-drive writes commands for them to read and run.
+benchmarks, estimates, advice rules, run history, the shelf and the dashboard. It depends on no other
+honeworks package. Users own every action: advice writes commands for them to read and run, and the
+shelf changes files only when they start it.
 
 ## 2. Concepts
 
@@ -324,15 +333,15 @@ tones and the plan on the server; the page only draws.
 | Plan | what was found (full, slow), then the advice as ordered steps: clean caches, prepare the external drive, move model folders, get full speed, find hidden space; each task with what it frees, a checkbox kept in the browser, and "How to do it" with the commands and their risks |
 | Space | a bar per drive with each store in its fixed colour, a table of the same, the biggest single things, and the two slow scans (hidden space, duplicates) as buttons with what they do |
 | Drives & speed | read and write speed compared across drives, then each drive's card with its filesystem and startup notes and its technical details |
-| Models | every model with its tool, size and drive, and its load time from each drive (estimated from the connection until the drive is tested, and labelled so), with a note when it fits in the memory free now and may load warm (§7) |
+| Models | every model with its tool, size and drive, and its load time from each drive (estimated from the connection until the drive is tested, and labelled so), with a note when it fits in the memory free now and may load warm (§7); models on a drive's shelf, connected or not; a checkbox per model with "Move to <drive>", "Bring back" and "Remove from drive", each opening a confirmation with the plan (§17) |
 | History | compare two scans, open an older one, download a report to share |
 
 Charts are inline SVG and HTML drawn by the page, in the dataviz reference palette for light and dark
 (decision D-016); every chart has a legend or a table. Store colours follow the store, never its size.
 The server refuses requests whose `Host` is not a local name (DNS rebinding), and changes (`POST`) without
 the page's token in the `X-Hone-Drive-Token` header, with a foreign `Origin`, or with a body that isn't
-JSON (CSRF). The page's content security policy allows only its own scripts and styles. A scan or a
-benchmark runs as one background job at a time; `/api/events` streams its progress and each benchmark
+JSON (CSRF). The page's content security policy allows only its own scripts and styles. A scan, a
+benchmark or a shelf action runs as one background job at a time; `/api/events` streams its progress and each benchmark
 chunk's throughput. Screens have their own address (`#drives`); `?still` turns off live updates, for
 screenshots.
 
@@ -341,7 +350,10 @@ screenshots.
 `hone-drive [dashboard [--port N] [--no-browser]]`, `scan [--add PATH] [--account] [--duplicates]
 [--json]`, `bench [PATH ...] [--tests seq,random,sustained,model] [--size 4G] [--model FILE] [--run ID]
 [--json]`, `advise [RUN] [--json]`, `runs [--json]`, `show [RUN] [--json]`, `compare RUN_A [RUN_B] [--json]`, `report [RUN]
-[--format md|json] [--keep-private]`. `RUN` defaults to `latest`. Commands print a short human summary,
+[--format md|json] [--keep-private]`, `shelf [--json]`, `shelf check [TOOL]`, `shelf move MODEL...
+[--to DRIVE] [--keep-local] [--dry-run] [--json]`, `shelf restore MODEL... [--from DRIVE] [--dry-run]
+[--json]`, `shelf remove MODEL... [--from DRIVE] [--only-copy]`, `shelf verify [DRIVE]` (§17). `RUN`
+defaults to `latest`. Commands print a short human summary,
 or JSON with `--json`; `scan` and `bench` save the run with its advice. The CLI uses `argparse` (decision
 D-002); `python -m hone_drive` is the same command.
 
@@ -356,6 +368,21 @@ run = bench(run, [str(Path.home()), "/mnt/models"], ["seq", "model"], BenchOptio
 for a in advise(run, str(Path.home())):
     print(a.severity, a.title, a.gain.bytes_freed)
 print(report(run, "md"))                                 # private details removed
+```
+
+The shelf (§17) is the module `hone_drive.shelf`:
+
+```python
+from hone_drive import scan, shelf
+
+run = scan()
+print(shelf.check(run, "ollama"))                              # Access(ok, problems, fix)
+the_plan = shelf.plan(run, ["ollama:gemma4:31b"], to="/run/media/user/PNYRP60PSSD")
+shelf.move(run, the_plan)                                      # Result(done, failed, stopped)
+shelf.contents(run)                                            # every drive's shelf, connected or not
+shelf.restore(run, ["ollama:gemma4:31b"])                      # the drive keeps its copy
+shelf.remove(run, ["ollama:gemma4:31b"], only_copy=False)      # from the drive only
+shelf.verify(run)                                              # re-hash every copy on connected drives
 ```
 
 The public names are exported from `hone_drive/__init__.py` with `__all__`. `hone_drive.testing` provides
@@ -384,6 +411,16 @@ everything; they never leave the machine unless the user shares a report.
 - **Bench** (`-m bench`, not in the default suite): full-size benchmarks on real drives, run by hand
   through `scripts/gpu-lock.sh`, since a 4 GiB write would disturb another project's model run on the same
   machine (decision D-006). None are written yet: the marker is reserved for them.
+- **Real programs** (default suite): the shelf's in-use check against real processes on every system: a
+  program with a model file open, one with it mapped into memory and closed, and a ComfyUI `main.py`
+  started on a port of its own (§17).
+- **Real tools** (`-m real`, not in the default suite; by hand through `scripts/gpu-lock.sh`, and in the
+  "Real tools" workflow on Linux, macOS and Windows runners): the real Ollama and the real Hugging Face
+  cache (`huggingface_hub`, dependency group `real`) moved to an exFAT disk image and back. A small model
+  is pulled, moved, no longer listed by Ollama, brought back, listed with the same digest, and answers; a
+  tiny Hugging Face repo is moved and back and found offline with the same bytes. On the Linux runner
+  Ollama is installed by its own installer as a service of its own user with its folder closed, as on the
+  reference machine: the test sees the access check fail, runs the fix it shows, and moves the model.
 
 ## 15. Guarantees (acceptance cases)
 
@@ -415,6 +452,27 @@ everything; they never leave the machine unless the user shares a report.
 15. `compare()` reports a renegotiated link and a throughput change beyond the spread between two runs.
 16. The package installs and `hone-drive scan --json` runs on Linux, macOS and Windows with no
     administrator rights and no tools beyond the OS's own.
+17. A file is removed from the computer only when the catalog on the drive records a copy that was read
+    back with the page cache bypassed and matched the local file's SHA-256, and neither file's size or
+    modification time changed since; otherwise both are hashed again first.
+18. Moving a model whose files are already on the drive with the same bytes copies nothing and only
+    removes the local copy; moving or bringing back a model twice ends in the same state as once.
+    Bringing a model back never removes anything from the drive.
+19. A move or a restore stopped, failed or killed at any point leaves every model complete in at least
+    one place, and the next run finishes it or cleans up after it.
+20. A model in use (loaded in Ollama, ComfyUI running, the file open in a process) is refused with the
+    reason, and nothing is changed.
+21. An Ollama blob is removed from the computer only when no model left there lists it.
+22. When hone-drive can't read, write or remove a store's files, `check()` says so with the command for
+    this system, which it never runs; nothing runs with administrator rights.
+23. A model brought back works with its tool: Ollama lists it with the same digest; ComfyUI, LM Studio,
+    llama.cpp and the user's folders find the file at its original path; the Hugging Face repo has the
+    same snapshot.
+24. A drive's shelf is listed when the drive is unplugged, and the drive is recognised by its id wherever
+    it is mounted.
+25. A move is refused when the drive lacks the room or its filesystem can't hold a file.
+26. Removing a model from a drive never touches the computer's copy, and is refused without an explicit
+    confirmation when the drive holds the only copy.
 
 ## 16. Known limits (0.1)
 
@@ -429,3 +487,80 @@ everything; they never leave the machine unless the user shares a report.
   shows no health summary (decision D-017).
 - APFS snapshots, Btrfs/ZFS compression and deduplication can make "used" differ from the sum of files;
   0.1 names these as possible causes of unaccounted space without measuring them.
+- The shelf's in-use check sees this user's programs only (an Ollama service of its own user answers
+  `/api/ps` instead); a program of another user with a model file open is not seen on Linux and macOS.
+
+## 17. The model shelf
+
+Change [0003](changes/0003-model-shelf.md). Models are used from the computer; a drive's **shelf** keeps
+the ones not needed now. Nothing here happens unless the user starts it.
+
+**A model** is, per tool: Ollama, its manifests (`manifests/` files and, since Ollama 0.40, `manifests-v2`
+links to a blob with the registry's bytes, D-025) and the blobs they list (a blob another model lists is
+shared);
+Hugging Face, one repo folder (`models--org--name`); ComfyUI, LM Studio, llama.cpp and the user's own
+folders, one model file. Its key is `<store id>:<name>` (`ollama:gemma4:31b`,
+`comfyui:diffusion_models/wan.safetensors`). Docker and package caches are not shelved: cleaning them is
+the answer (A07).
+
+**On the drive**, `<drive>/hone-drive/` holds `drive.json` (an id, so the drive is found wherever it is
+mounted), `shelf.json` (the catalog: each model's tool, names, original folder, and each file's size,
+SHA-256 and the modification times it had when it was checked; Hugging Face's snapshot links as data, so
+an exFAT drive can hold them) and `files/<tool>/<folder id>/...` (one copy of a blob two models list).
+A copy of each catalog is kept in `<data folder>/shelves/<drive id>.json`, so an unplugged drive's models
+are still listed. The catalog carries `format: 1`.
+
+**Moving** (`plan()`, then `move()`):
+
+1. Refuse, changing nothing, when the model is in use (Ollama `/api/ps`; for ComfyUI, a process running
+   that install's `main.py` on any port, the ComfyUI desktop app, or a server answering on
+   `127.0.0.1:8188`; a file one of this user's programs has open or mapped into memory; on Windows, a
+   file another program holds, found by opening it without sharing), when this user can't read,
+   write or remove its files (with the fix, below), when the drive lacks room for the files still to
+   copy plus 10% plus 2 GiB, or when the drive is FAT32 and a file is over 4 GB.
+2. Compare first, trusting the catalog: a file whose size and modification time on both sides are still
+   the recorded ones is not read or copied again; any other file already on the drive with the same size
+   is hashed on both sides.
+3. Copy what is missing to `<name>.part`, hashing as it reads, `fsync`, read the copy back with the page
+   cache bypassed (§6.2), compare, and rename. Each checked file is recorded in the catalog at once.
+4. Mark the model complete in the catalog, then remove it from the computer (not with `--keep-local`):
+   Ollama through its server's `DELETE /api/delete` when it answers, and in any case the manifests and the
+   blobs no remaining manifest lists; Hugging Face the repo folder; the others the file.
+
+**Ollama's service folder** (Linux): Ollama makes its folders with mode 0755, so no permission rule lets
+another user write into the ones it makes later. With Ollama running, hone-drive only needs to read its
+folder: Ollama's server removes a model (`DELETE /api/delete`), and takes one back itself: hone-drive
+serves the drive's copy as a registry on 127.0.0.1 for one pull, Ollama pulls it (checking every blob),
+copies it to its original names and drops the temporary name, and the manifest it wrote must list the
+same config and layers as the drive's (decision D-024). Where the folder is this user's (macOS, Windows, a user's own
+Ollama), files are copied directly.
+
+**Bringing back** copies each file to its original place the same way, checked against the catalog's
+SHA-256 (a drive copy that doesn't match is reported damaged and nothing is written in place), Ollama's
+blobs before its manifests, Hugging Face's links last (a copy where the OS refuses links). It is refused
+for an unplugged drive, an incomplete copy, or a different file already in the model's place. It never
+removes anything from the drive.
+
+**Removing from a drive** never touches the computer. It is refused for a model whose only copy is on the
+drive unless the user confirms (the dashboard asks for the model's name; the CLI needs `--only-copy`).
+Files other models on the drive list stay. **Verifying** re-hashes every file on a connected drive and
+marks damaged models incomplete, so they can be moved again.
+
+**Access** (`check()`) is tried, not assumed: list and read the folders, create and remove a test file
+(`.hone-drive-check-<pid>`), read every file of the model. When it fails, the fix is built for this system
+from what was found and shown, never run:
+
+| Found | Fix shown |
+|---|---|
+| Linux, the folder owned by another user, for a running Ollama (its service: `ollama`) | `sudo setfacl -R -m u:<user>:rX,d:u:<user>:rX <folder>`: reading only, for this user only, also files added later, with the line that undoes it; the `acl` package's install command first when `setfacl` is missing |
+| Linux, another user's folder hone-drive must change (any other tool, or Ollama not running) | the same with `rwX`, and `d:u:<owner>:rwX` so the owner keeps reading what is written for it |
+| Linux, the folder this user's own but not writable | `chmod -R u+rwX <folder>` |
+| macOS | `sudo chmod -R +a "user:<user> allow read,write,delete,...,file_inherit,directory_inherit" <folder>` |
+| Windows | `icacls "<folder>" /grant "<user>:(OI)(CI)M" /T` in an administrator PowerShell |
+
+**Interruptions:** a stop removes the `.part` file and keeps what is complete; an error or a killed
+process leaves each model complete on the computer (the catalog says the drive's copy is not complete)
+or on the drive (the catalog says it is), and the next run finishes it. One shelf job at a time per
+machine, and a lock in `<drive>/hone-drive/` holding the host and process, so two computers never write
+one catalog at once.
+

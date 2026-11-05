@@ -62,6 +62,27 @@ def ollama_models(root: Path) -> Path:
     return models
 
 
+def test_ollama_040_keeps_manifests_in_two_folders(ctx: Context, home: Path) -> None:
+    """Ollama 0.40: `manifests-v2/<host>/...` links to a blob with the registry's manifest; a name in
+    both folders is one model, a name only in manifests-v2 (an `ollama cp`) is found too (D-025)."""
+    models = ollama_models(home / ".ollama")
+    data = json.loads((models / "manifests/registry.ollama.ai/library/tiny/latest").read_text())
+    raw = json.dumps(data, indent=2).encode()
+    digest = hashlib.sha256(raw).hexdigest()
+    (models / "blobs" / f"sha256-{digest}").write_bytes(raw)
+    for name in ("library/tiny/latest", "user/copied/1"):
+        link = models / "manifests-v2" / "ollama.com" / name
+        link.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.symlink(os.path.join("..", "..", "..", "..", "blobs", f"sha256-{digest}"), link)
+        except OSError:
+            link.write_bytes(raw)
+    store = find_ollama(ctx)[0]
+    tiny = next(i for i in store.items if "tiny:latest" in i.names)
+    assert tiny.names == ["tiny:latest", "user/copied:1"]
+    assert not any(i.id == "(unreferenced blobs)" and i.bytes and i.bytes > 1000 for i in store.items)
+
+
 def test_ollama_files_count_shared_names_once(ctx: Context, home: Path) -> None:
     ollama_models(home / ".ollama")
     store = find_ollama(ctx)[0]

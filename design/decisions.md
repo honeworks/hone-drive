@@ -64,7 +64,8 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
 - **Choice:** advice shows commands per OS with a copy button and never runs them.
 - **Why:** moving hundreds of gigabytes of models, changing service settings and reformatting drives can
   lose data; doing it safely (checks, resumable copies, rollback) deserves its own design.
-- **Status:** accepted 2026-10-18 by the owner ("accepted").
+- **Status:** accepted 2026-10-18 by the owner ("accepted"). For models, superseded by change 0003 (the
+  shelf): hone-drive moves models when the user asks; advice still only shows commands.
 
 ## D-008: distribution through PyPI  (2026-10-18)
 
@@ -210,4 +211,64 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   named exceptions grows silently; a made-up command for "do nothing" helps no one.
 - **Status:** the owner left it to the implementer on 2026-11-05 ("you decide what's best for an open
   source project").
+
+## D-022: how the shelf is built  (2026-11-05)
+
+- **Choice:** change 0003 named three modules; the shelf has six, each under the ~300-line guide:
+  `shelf.py` (the public API), `shelf_move.py`, `shelf_restore.py`, `shelf_models.py`, `shelf_catalog.py`,
+  `shelf_copy.py`, plus `access.py` and `cli_shelf.py`. The record's optional `Item.on_drive` was not
+  needed: the views read the shelves directly, so the run's format is unchanged. The benchmark's lock
+  became `bench_safety.lock_file`, holding "<host> <pid>", so a lock on a drive tells another computer's
+  hold from a process that is gone.
+- **Why:** one module per job keeps each readable; no change to the stored run means nothing to migrate.
+- **Status:** follows change 0003.
+
+## D-023: what "in use" covers, and where the real tools are tested  (2026-11-05)
+
+- **Question:** the first build saw ComfyUI only on its default port, open files only as psutil lists
+  them, and the real Ollama only on Linux; the owner asked for all three to be covered ("I need them").
+- **Choice:** one pass over this user's programs finds their open and memory-mapped files and the
+  processes running a ComfyUI install's `main.py` (any port) or the desktop app; on Windows a file is also
+  in use when it can't be opened without sharing. The real tools run in a CI workflow on Linux, macOS and
+  Windows runners against an exFAT disk image, with the real Ollama (on Linux, installed as a service of
+  its own user with its folder closed, and the fix hone-drive shows run by the test) and the real Hugging
+  Face cache. `huggingface_hub` is a test-only dependency group (`real`), never installed for users.
+- **Why:** these are the cases the guarantees (AC20, AC22, AC23) promise; tested in the default suite with
+  real processes, and with the real tools wherever a runner has them.
+- **Status:** follows change 0003, at the owner's request.
+
+## D-024: Ollama's service folder is read, and Ollama takes models back itself  (2026-11-05)
+
+- **Question:** on the CI runner set up like the reference machine (Ollama as a service of its own user),
+  bringing a model back failed: "can't change files in .../models/manifests". Ollama makes its folders
+  with mode 0755, and a POSIX ACL's mask then limits any rule for another user to reading, in every folder
+  Ollama makes after the fix was run. No permission rule can let another user write there for good.
+- **Choice:** with Ollama running, hone-drive asks only to read its folder (the fix is `rX`). Ollama's
+  server removes models (`DELETE /api/delete`), and takes them back: hone-drive serves the drive's copy
+  as a minimal registry on 127.0.0.1 for one pull (manifest by tag; blobs with ranges, sent through a
+  redirect to `localhost`, as registries send blobs from another host), Ollama pulls it under a temporary
+  name, copies it to each original name and deletes the temporary one. The manifest Ollama then holds
+  must list the same config and layers as the drive's (since 0.40 Ollama writes a pulled manifest in its
+  own form, so its bytes may differ); Ollama checks every blob's SHA-256 itself. The registry listens on
+  127.0.0.1 and ::1 on one port, since `localhost` may be either. Where hone-drive
+  may write the folder (macOS, Windows, a user's own Ollama), files are copied directly as before.
+- **Why:** it needs less access (read, not write), works for every model Ollama ever adds, and the model
+  comes back exactly as it left. Tested with the real Ollama, both ways back, on the reference machine.
+- **Status:** follows change 0003; found by the "Real tools" workflow the owner asked for.
+
+## D-025: Ollama 0.40 keeps manifests in two folders  (2026-11-05)
+
+- **Question:** the "Real tools" runners have Ollama 0.40, which keeps a model's manifest as a blob (the
+  registry's own bytes) with a link to it in `manifests-v2/<host>/<namespace>/<model>/<tag>` (`ollama.com`
+  for its library), next to the older `manifests/` file it still writes on a pull; `ollama cp` and a pull
+  from another registry write only `manifests-v2`. The scan saw only `manifests/`.
+- **Choice:** the scan reads both folders and makes one model of every name whose manifest lists the same
+  config and layers (the item id is now a hash of those, not of the manifest's bytes); the blob a
+  manifests-v2 link points to is counted as used. On the shelf an Ollama model is its blobs, the
+  manifest blob, the `manifests/` files and the `manifests-v2` links (kept as links in the catalog, as
+  Hugging Face's are). A model counts as on the computer when Ollama has each of its names listing the
+  drive copy's config and layers, in either folder. The way back through Ollama's server serves the
+  registry's own bytes when the drive has them.
+- **Why:** Ollama is moving to the new layout; a model must move and come back whole in both.
+- **Status:** follows change 0003; found by the "Real tools" workflow.
 

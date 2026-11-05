@@ -7,10 +7,11 @@ import contextlib
 import json
 import os
 import shutil
+import socket
 from collections.abc import Generator
 from pathlib import Path
 
-from hone_drive.errors import BenchmarkBusy, UnsafeBenchmark
+from hone_drive.errors import BenchmarkBusy, HoneDriveError, UnsafeBenchmark
 from hone_drive.runs import data_home
 
 GIB = 1024**3
@@ -93,25 +94,34 @@ def clean_leftovers(home: Path | None = None) -> list[str]:
 
 @contextlib.contextmanager
 def machine_lock(home: Path | None = None) -> Generator[None]:
+    with lock_file((home or data_home()) / "bench.lock", BenchmarkBusy, "another benchmark is running"):
+        yield
+
+
+@contextlib.contextmanager
+def lock_file(path: Path, error: type[HoneDriveError], busy: str) -> Generator[None]:
+    """A lock file holding "<host> <pid>": taken when free or left by a process that is gone; `error` with
+    `busy` when a live process (or another computer, for a lock on a drive) holds it."""
     import psutil  # noqa: PLC0415
 
-    path = (home or data_home()) / "bench.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
+    host = socket.gethostname()
     for _ in range(2):
         try:
             fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             break
         except FileExistsError:
-            holder = path.read_text(encoding="utf-8").strip()
-            if holder.isdigit() and psutil.pid_exists(int(holder)) and int(holder) != os.getpid():
-                raise BenchmarkBusy(
-                    f"another benchmark is running (process {holder}); wait for it to finish"
-                ) from None
+            holder_host, _, pid = path.read_text(encoding="utf-8").strip().rpartition(" ")
+            if holder_host and holder_host != host:
+                where = f"on another computer ({holder_host}); if none is, delete {path}"
+                raise error(f"{busy} {where}") from None
+            if pid.isdigit() and psutil.pid_exists(int(pid)) and int(pid) != os.getpid():
+                raise error(f"{busy} (process {pid}); wait for it to finish") from None
             path.unlink(missing_ok=True)  # left by a process that is gone
     else:  # pragma: no cover - two processes racing for a stale lock
-        raise BenchmarkBusy("could not take the benchmark lock")
+        raise error(f"could not take the lock {path}")
     try:
-        os.write(fd, str(os.getpid()).encode())
+        os.write(fd, f"{host} {os.getpid()}".encode())
         os.close(fd)
         yield
     finally:

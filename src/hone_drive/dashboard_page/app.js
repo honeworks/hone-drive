@@ -7,6 +7,16 @@ const PHASES = {
   "seq-write": "Writing a test file", "seq-read": "Reading it back", "model-read": "Reading your model files",
   "random-read": "Random reads", "sustained-write": "Long write test",
 };
+const SHELF = { move: "Copying and checking", restore: "Bringing back", check: "Checking" };
+
+function shelfSummary(result) {
+  if (!result) return "Done";
+  const failed = Object.entries(result.failed);
+  if (result.stopped) return `Stopped: ${result.done.length} done; what was finished is kept`;
+  if (failed.length) return `${result.done.length} done; ${failed[0][0].split(":").slice(1).join(":")}: ${failed[0][1]}`;
+  return `${result.done.length} model${result.done.length === 1 ? "" : "s"} done`;
+}
+
 export const state = { runs: [], view: null, job: { running: false }, screen: "overview", tick: null };
 
 export async function load(runId = "latest") {
@@ -75,10 +85,12 @@ function renderJob() {
       el("button", { class: "btn small", text: "Dismiss", onclick: () => { state.job = {}; renderJob(); } })));
     return;
   }
-  const t = job.kind === "bench" ? state.tick : null;
-  const what = job.kind === "bench"
-    ? (t ? `${PHASES[t.test] || t.test} on ${volumeName(t.volume)}` : "Preparing the speed test …")
-    : `Scanning: ${job.message || "starting"} …`;
+  const t = job.kind === "bench" || job.kind === "shelf" ? state.tick : null;
+  const what = job.kind === "shelf"
+    ? (t ? `${SHELF[t.test] || t.test} ${t.volume}` : `Checking: ${job.message || "starting"} …`)
+    : job.kind === "bench"
+      ? (t ? `${PHASES[t.test] || t.test} on ${volumeName(t.volume)}` : "Preparing the speed test …")
+      : `Scanning: ${job.message || "starting"} …`;
   const fraction = t ? t.done / Math.max(t.total, 1) : null;
   const fill = el("div", {});
   fill.style.width = fraction === null ? "100%" : `${Math.round(fraction * 100)}%`;
@@ -86,7 +98,7 @@ function renderJob() {
   if (fraction === null) fill.style.opacity = "0.35";
   bar.replaceChildren(el("div", { class: "jobbar-inner" }, el("span", { class: "label", text: what }),
     el("div", { class: "progress" }, el("div", { class: "meter" }, fill)),
-    t ? el("span", { class: "small soft", text: `${Math.round(fraction * 100)}% · ${speed(t.gbs)}` }) : null,
+    t ? el("span", { class: "small soft", text: `${Math.round(fraction * 100)}%` + (t.gbs ? ` · ${speed(t.gbs)}` : "") }) : null,
     el("button", { class: "btn small", text: "Stop", onclick: () => api("/stop", {}) })));
 }
 
@@ -99,7 +111,7 @@ function listen() {
     const job = JSON.parse(e.data);
     state.job = {};
     state.tick = null;
-    toast(job.kind === "bench" ? "Speed test finished" : "Scan finished");
+    toast(job.kind === "bench" ? "Speed test finished" : job.kind === "shelf" ? shelfSummary(job.result) : "Scan finished");
     load();
   });
   events.addEventListener("failed", (e) => { state.job = { ...JSON.parse(e.data), failed: true }; renderJob(); });
