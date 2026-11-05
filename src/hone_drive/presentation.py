@@ -92,12 +92,14 @@ def speed(run: Run, volume: Volume) -> dict[str, Any] | None:
     write = found.get("sustained-write") or found.get("seq-write")
     if read is None and write is None:
         return None
+    cached = any(m.cache == "possibly-cached" for m in (read, write) if m is not None)
+    trusted = read is not None and read.gbs > 0 and read.cache != "possibly-cached"
     return {
         "read": read.gbs if read else None,
         "write": write.gbs if write else None,
         "measured": (read or write).measured if (read or write) else None,  # type: ignore[union-attr]
-        "cached": any(m.cache == "possibly-cached" for m in found.values()),
-        "model_seconds": round(20e9 / (read.gbs * 1e9), 1) if read and read.gbs else None,
+        "cached": cached,  # the page greys it out and says why (design §6.2, AC7)
+        "model_seconds": round(20e9 / (read.gbs * 1e9), 1) if trusted and read else None,
         "bound": read.label if read else None,
     }
 

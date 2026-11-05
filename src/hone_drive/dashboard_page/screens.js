@@ -57,6 +57,12 @@ function speedFact(drive) {
   }
   const parts = [s.read ? `Reads ${speed(s.read)}` : null, s.write ? `writes ${speed(s.write)}` : null].filter(Boolean).join(" · ");
   const detail = s.model_seconds ? `A 20 GB model loads in about ${secs(s.model_seconds)}.` : "";
+  if (s.cached) {
+    const f = fact("neutral", parts, `The system's cache could not be bypassed on this drive, so these numbers may measure memory, not the drive. Tested ${ago(s.measured)}.`,
+      drive.test_folder ? testButton(drive, "Test again") : null);
+    f.classList.add("cached");
+    return f;
+  }
   const tone = s.read && s.read < 0.3 ? "warn" : "good";
   return fact(tone, parts, `${detail} Tested ${ago(s.measured)}.`, drive.test_folder ? testButton(drive, "Test again") : null);
 }
@@ -243,7 +249,8 @@ function speedChart(tested) {
         const bw = Math.max(3, ((w - labelW - 110) * value) / max);
         const r = Math.min(4, bw / 2);
         const bar = svg("path", { fill: seriesColor(i), d: `M${labelW},${y + 4} H${labelW + bw - r} Q${labelW + bw},${y + 4} ${labelW + bw},${y + 4 + r} V${y + 20 - r} Q${labelW + bw},${y + 20} ${labelW + bw - r},${y + 20} H${labelW} Z` });
-        tip(bar, [speed(value), `${label} · ${d.name}`]);
+        if (d.speed.cached) bar.setAttribute("opacity", "0.35");
+        tip(bar, [speed(value), `${label} · ${d.name}`, ...(d.speed.cached ? ["may measure memory: the cache could not be bypassed"] : [])]);
         marks.push(bar, svg("text", { class: "value", x: labelW + bw + 8, y: y + 17, text: speed(value) }));
       }
       y += rowH;

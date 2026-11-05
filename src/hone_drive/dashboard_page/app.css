@@ -232,3 +232,4 @@ svg .value { fill: var(--ink); font-weight: 600; font-size: 13px; }
 h1, h2, .task-title, .what { overflow-wrap: anywhere; }
 .scroll { max-width: 100%; }
 .plan-row { display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; }
+.fact.cached .what { color: var(--muted); }
