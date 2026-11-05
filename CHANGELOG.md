@@ -8,6 +8,15 @@ design changed is in [`design/changes/`](design/changes/).
 
 ### Changed
 
+- The code and the docs agree again (an audit on 2026-11-05). Behaviour restored to match the design:
+  advice A07 no longer offers `docker volume prune` or `docker container prune` as safe cleaning;
+  duplicates are found inside Hugging Face repos; reports replace store paths outside the home folder and
+  the tools' default folders with `<custom>`; copy times fall back to link speeds and say so; random
+  reads run 20 s and are timed as they ran; sustained writes are labelled `throttling after N s`; the
+  dashboard greys out a speed the OS cache may have served and notes models that may load warm; `runs`
+  and `compare` take `--json`; A01 and A04 show the command that checks them again. Elsewhere the
+  design, CONTRIBUTING and AGENTS now describe what the code does (D-019 to D-021).
+
 - The dashboard, rebuilt around the user's questions ([0002](design/changes/0002-a-dashboard-people-understand.md)):
   drives by name, verdicts in words, a headline, the advice as an ordered plan with checkboxes, one-click
   speed tests with a progress bar in words. Advice text names drives instead of mount points.
@@ -23,9 +32,9 @@ design changed is in [`design/changes/`](design/changes/).
   direct I/O for both, tested against hand-written fixtures and in CI on Ubuntu, macOS and Windows; not
   yet checked on a real Mac or PC (D-012).
 - Milestone M3 of [0001](design/changes/0001-initial-design.md), advice and the dashboard: the ten
-  advice rules with per-OS commands that hone-drive never runs (D-018); run comparison; reports with
+  advice rules with per-OS commands that hone-drive never runs (D-007); run comparison; reports with
   private details removed; the local dashboard (Overview, Drives, Benchmark, Models, Advice, History)
-  with live benchmark progress, guarded against DNS rebinding and cross-site requests (D-016);
+  with live benchmark progress, guarded against DNS rebinding and cross-site requests (D-005);
   measurements kept across scans (D-015); `hone-drive advise`, `compare`, `report`, `dashboard` (the
   default command). No SMART health yet (D-017).
 - Milestone M2 of [0001](design/changes/0001-initial-design.md), the benchmarks: sequential write and

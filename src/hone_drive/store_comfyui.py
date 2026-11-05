@@ -48,7 +48,7 @@ def find_comfyui(ctx: Context) -> list[Store]:
 
 
 def _installs(ctx: Context) -> list[str]:
-    """Folders with a `models/` folder and ComfyUI's `main.py`, at most two levels under the home folder."""
+    """Folders with a `models/` folder and ComfyUI's `main.py`, at most three levels under the home folder."""
     found: list[str] = []
     level = [ctx.home]
     for _ in range(3):
