@@ -25,7 +25,9 @@ jobs:
       - run: uv sync --all-extras --group real --frozen
       - name: Ollama as a service of its own user (the official installer)
         run: |
-          curl -fsSL https://ollama.com/install.sh | sh
+          # the download is large and sometimes cut short: try the installer up to three times
+          for i in 1 2 3; do curl -fsSL https://ollama.com/install.sh | sh && break; sleep 10; done
+          command -v ollama
           sudo chmod 700 /usr/share/ollama   # closed to everyone else, as on the reference machine
           # the runner has no systemd: start what the installer's service runs, as the ollama user
           sudo -u ollama -H env OLLAMA_HOST=127.0.0.1:11434 nohup /usr/local/bin/ollama serve > "$RUNNER_TEMP/ollama.log" 2>&1 &

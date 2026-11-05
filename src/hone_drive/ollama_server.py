@@ -37,10 +37,13 @@ def answers(ctx: Context) -> bool:
 
 def drive_manifest(entry: ShelfModel, mount: str) -> bytes:
     """The model's manifest as the drive holds it: the registry's own bytes where Ollama kept them (the blob
-    a manifests-v2 link points to), else the manifests/ file."""
-    blobs = [target.rsplit("/", 1)[-1] for rel, target in ((x.rel, x.target) for x in entry.links)
-             if rel.startswith("manifests-v2/")]  # fmt: skip
-    rel = f"blobs/{blobs[0]}" if blobs else next(f.rel for f in entry.files if f.rel.startswith("manifests/"))
+    a manifests-v2 link points to, or a manifests-v2 file where the OS made no link), else the
+    manifests/ file."""
+    linked = [x.target.rsplit("/", 1)[-1] for x in entry.links if x.rel.startswith("manifests-v2/")]
+    files = [f.rel for f in entry.files if f.rel.startswith("manifests")]
+    rel = (
+        f"blobs/{linked[0]}" if linked else sorted(files, key=lambda r: not r.startswith("manifests-v2/"))[0]
+    )
     with open(catalog.drive_file(mount, entry, rel), "rb") as handle:
         return handle.read()
 
@@ -50,7 +53,7 @@ def ollama_here(entry: ShelfModel, mount: str) -> bool:
     layers, and every one of those blobs is there."""
     try:
         data = cast(dict[str, Any], json.loads(drive_manifest(entry, mount)))
-    except (OSError, ValueError, StopIteration):
+    except (OSError, ValueError, IndexError):
         return False
     config = cast(dict[str, Any], data.get("config") or {})
     layers = [config, *cast(list[dict[str, Any]], data.get("layers") or [])]

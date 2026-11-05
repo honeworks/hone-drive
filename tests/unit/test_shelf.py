@@ -333,3 +333,23 @@ def test_ollama_040_models_leave_and_come_back_whole(machine: Machine) -> None:
     assert v2.read_bytes() == before and os.path.islink(v2) == (sys.platform != "win32" or os.path.islink(v2))
     assert TINY in shelf.local_models(machine.run())
     assert shelf.remove(machine.run(), [TINY]).done == [TINY]  # on the computer: the drive may let go
+
+
+@pytest.mark.parametrize("route", ["auto", "always"])
+def test_an_ollama_040_model_known_only_by_a_manifests_v2_file(
+    machine: Machine, monkeypatch: pytest.MonkeyPatch, route: str
+) -> None:
+    """Ollama 0.40 on Windows keeps manifests-v2 as files, and a copied name has no manifests/ file."""
+    legacy = machine.models / "manifests" / "registry.ollama.ai" / "library" / "tiny" / "latest"
+    v2 = machine.models / "manifests-v2" / "ollama.com" / "library" / "tiny" / "latest"
+    raw = v2.read_bytes()
+    legacy.unlink()
+    v2.unlink()
+    v2.write_bytes(raw)
+    machine.ollama.running = route == "always"
+    monkeypatch.setattr(shelf_restore, "VIA_SERVER", route)
+    assert move(machine, TINY).done == [TINY]
+    restored = shelf.restore(machine.run(), [TINY])
+    assert restored.done == [TINY], restored
+    assert TINY in shelf.local_models(machine.run())
+    assert shelf.remove(machine.run(), [TINY]).done == [TINY]
