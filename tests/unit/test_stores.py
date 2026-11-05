@@ -74,7 +74,7 @@ def test_ollama_040_keeps_manifests_in_two_folders(ctx: Context, home: Path) -> 
         link = models / "manifests-v2" / "ollama.com" / name
         link.parent.mkdir(parents=True, exist_ok=True)
         try:
-            os.symlink(f"../../../../blobs/sha256-{digest}", link)
+            os.symlink(os.path.join("..", "..", "..", "..", "blobs", f"sha256-{digest}"), link)
         except OSError:
             link.write_bytes(raw)
     store = find_ollama(ctx)[0]

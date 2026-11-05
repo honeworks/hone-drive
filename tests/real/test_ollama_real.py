@@ -30,7 +30,7 @@ from hone_drive import shelf, shelf_restore
 from hone_drive.model import Run
 from hone_drive.scanner import os_name
 from hone_drive.shelf_busy import Busy
-from hone_drive.store_ollama import find_ollama
+from hone_drive.store_ollama import find_ollama, read_manifests
 from hone_drive.stores import Context
 from tests.real.real_machine import ROOT, allowed, drive_folder, machine, run_fix
 
@@ -120,17 +120,10 @@ def system(drive: Path) -> Ollama:
     return Ollama(url, ctx, machine([home], drive, {"ollama": find_ollama}, ctx), drive, None)
 
 
-def manifests(ollama: Ollama) -> dict[str, list[str]]:
-    """Each manifest file and the blobs it lists (config, then layers): the model itself."""
+def manifests(ollama: Ollama) -> dict[str, tuple[str, ...]]:
+    """Each name Ollama has, in either of its folders, and the config and layers it lists: the model."""
     root = ollama.models or Path(next(s.path for s in ollama.run().stores if s.id == "ollama" and s.path))
-    found = (root / "manifests").rglob("*") if (root / "manifests").is_dir() else []
-    listed: dict[str, list[str]] = {}
-    for path in found:
-        if path.is_file():
-            data = json.loads(path.read_text(encoding="utf-8"))
-            layers = [data["config"], *data["layers"]]
-            listed[path.relative_to(root).as_posix()] = [str(layer["digest"]) for layer in layers]
-    return listed
+    return {m.name: m.digests for m in read_manifests(str(root))}
 
 
 def key_of(ollama: Ollama) -> tuple[str, str]:

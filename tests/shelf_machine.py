@@ -142,7 +142,7 @@ def manifest_v2(models: Path, name: str, tag: str, digests: list[str]) -> None:
     path = models / "manifests-v2" / "ollama.com" / "library" / name / tag
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        os.symlink(f"../../../../blobs/{held}", path)
+        os.symlink(os.path.join("..", "..", "..", "..", "blobs", held), path)
     except OSError:  # Windows without the right to make links
         path.write_bytes((models / "blobs" / held).read_bytes())
 
