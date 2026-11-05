@@ -174,7 +174,10 @@ def _through_ollama(shelf: Shelf, entry: ShelfModel, ctx: Context) -> None:
     for f in entry.files:
         path = _local(entry, f.rel)
         if f.rel.startswith("manifests/") and not _on_computer(entry, f, shelf.mount):
-            raise ShelfDamaged(f"Ollama wrote {path} differently from the copy on {shelf.name}")
+            raise ShelfDamaged(
+                f"Ollama wrote {path} differently from the copy on {shelf.name}: {_head(path)} "
+                f"instead of {_head(catalog.drive_file(shelf.mount, entry, f.rel))}"
+            )
         f.local_ns = mtime_ns(path) if os.path.exists(path) else None
 
 
@@ -197,6 +200,15 @@ def _on_computer(entry: ShelfModel, f: ShelfFile, mount: str | None = None) -> b
     if not os.path.isfile(path) or os.path.getsize(path) != f.bytes:
         return False
     return sha256_of(path, direct=False, stop=Options().stop) == f.sha256
+
+
+def _head(path: str) -> str:
+    """The start of a small text file, to show in a message."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            return repr(handle.read(400))
+    except OSError as exc:
+        return f"(unreadable: {exc})"
 
 
 def same_layers(local: str, drive: str) -> bool:
