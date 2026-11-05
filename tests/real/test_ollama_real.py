@@ -13,7 +13,6 @@ brings it back, and checks Ollama lists it with the same digest and answers with
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import shutil
@@ -121,15 +120,17 @@ def system(drive: Path) -> Ollama:
     return Ollama(url, ctx, machine([home], drive, {"ollama": find_ollama}, ctx), drive, None)
 
 
-def manifests(ollama: Ollama) -> dict[str, str]:
-    """Each manifest file and its SHA-256 (what Ollama's digest is computed from), to show a mismatch."""
+def manifests(ollama: Ollama) -> dict[str, list[str]]:
+    """Each manifest file and the blobs it lists (config, then layers): the model itself."""
     root = ollama.models or Path(next(s.path for s in ollama.run().stores if s.id == "ollama" and s.path))
     found = (root / "manifests").rglob("*") if (root / "manifests").is_dir() else []
-    return {
-        str(p.relative_to(root)): hashlib.sha256(p.read_bytes()).hexdigest()[:12]
-        for p in found
-        if p.is_file()
-    }
+    listed: dict[str, list[str]] = {}
+    for path in found:
+        if path.is_file():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            layers = [data["config"], *data["layers"]]
+            listed[path.relative_to(root).as_posix()] = [str(layer["digest"]) for layer in layers]
+    return listed
 
 
 def key_of(ollama: Ollama) -> tuple[str, str]:
@@ -165,8 +166,8 @@ def test_a_real_ollama_model_leaves_and_comes_back(
     assert restored.done == [key], restored
     after = ollama.listed()
     assert name in after, (version, before, after)
-    # the manifest Ollama reads is byte for byte the one it had (its own listing digest can differ: since
-    # 0.40 Ollama reports a pulled model's registry digest until it re-reads the folder)
+    # the same model: the same names, each with the same config and layers (the bytes of a manifest and
+    # Ollama's listing digest can differ: since 0.40 Ollama writes a pulled manifest in its own form)
     assert manifests(ollama) == on_disk, (version, before, after)
     answer = ollama.call("/api/embed", {"model": name, "input": "hello", "keep_alive": 0})
     assert answer["embeddings"] and len(answer["embeddings"][0]) > 10

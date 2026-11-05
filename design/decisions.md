@@ -247,8 +247,10 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   server removes models (`DELETE /api/delete`), and takes them back: hone-drive serves the drive's copy
   as a minimal registry on 127.0.0.1 for one pull (manifest by tag; blobs with ranges, sent through a
   redirect to `localhost`, as registries send blobs from another host), Ollama pulls it under a temporary
-  name, copies it to each original name and deletes the temporary one. The manifest Ollama then holds is
-  checked against the catalog byte for byte; Ollama checks every blob's SHA-256 itself. Where hone-drive
+  name, copies it to each original name and deletes the temporary one. The manifest Ollama then holds
+  must list the same config and layers as the drive's (since 0.40 Ollama writes a pulled manifest in its
+  own form, so its bytes may differ); Ollama checks every blob's SHA-256 itself. The registry listens on
+  127.0.0.1 and ::1 on one port, since `localhost` may be either. Where hone-drive
   may write the folder (macOS, Windows, a user's own Ollama), files are copied directly as before.
 - **Why:** it needs less access (read, not write), works for every model Ollama ever adds, and the model
   comes back exactly as it left. Tested with the real Ollama, both ways back, on the reference machine.

@@ -95,7 +95,7 @@ def manifest_path(models: Path, name: str) -> Path:
         parts = ["registry.ollama.ai", "library", *parts]
     elif len(parts) == 2:
         parts = ["registry.ollama.ai", *parts]
-    return models.joinpath("manifests", *parts, tag)
+    return models.joinpath("manifests", *[p.replace(":", "%3A") for p in parts], tag)  # Windows: no ":"
 
 
 @dataclass

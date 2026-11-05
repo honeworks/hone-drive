@@ -4,9 +4,11 @@ drive (change 0003). Bringing back only copies: it never removes anything from t
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import shutil
 from dataclasses import dataclass
+from typing import Any, cast
 
 from hone_drive import access, text
 from hone_drive import shelf_catalog as catalog
@@ -68,7 +70,7 @@ def plan_restore(
         item = Planned(key, entry.names, entry.tool, sum(f.bytes for f in entry.files))
         item.refused, item.fix = _restore_refusal(run, found, entry, ctx)
         if item.refused is None:
-            item.copy_bytes = sum(f.bytes for f in entry.files if not _on_computer(entry, f))
+            item.copy_bytes = sum(f.bytes for f in entry.files if not _on_computer(entry, f, found.mount))
             local = mount_of(entry.root, [v.mount for v in run.volumes]) or entry.root
             if int(item.copy_bytes * 1.1) + MARGIN > _free(local):
                 item.refused = f"not enough room on the computer: it needs {text.size(item.copy_bytes)}"
@@ -92,7 +94,7 @@ def _restore_refusal(
             return checked.problems[0], checked.fix
     for f in entry.files:
         path = _local(entry, f.rel)
-        if os.path.exists(path) and not _on_computer(entry, f):
+        if os.path.exists(path) and not _on_computer(entry, f, found.mount):
             return f"a different file is already at {path}; move or rename it first", []
     return None, []
 
@@ -140,7 +142,7 @@ def _restore_one(shelf: Shelf, entry: ShelfModel, options: Options) -> None:
             if options.on_tick:
                 options.on_tick(Tick("restore", entry.names[0], base + n, total))
 
-        if not _on_computer(entry, f):
+        if not _on_computer(entry, f, shelf.mount):
             copy_checked(catalog.drive_file(shelf.mount, entry, f.rel), path, options.stop, tick, f.sha256)
         f.local_ns = mtime_ns(path)
         done += f.bytes
@@ -166,12 +168,12 @@ def _folders(entry: ShelfModel) -> list[str]:
 
 def _through_ollama(shelf: Shelf, entry: ShelfModel, ctx: Context) -> None:
     """Ollama pulls the drive's copy from hone-drive and checks every blob; then the manifest it wrote
-    must be the catalog's, byte for byte."""
-    if not all(_on_computer(entry, f) for f in entry.files):
+    must list the same config and layers as the drive's."""
+    if not all(_on_computer(entry, f, shelf.mount) for f in entry.files):
         run_import(entry, shelf.mount, ctx)
     for f in entry.files:
         path = _local(entry, f.rel)
-        if f.rel.startswith("manifests/") and not _on_computer(entry, f):
+        if f.rel.startswith("manifests/") and not _on_computer(entry, f, shelf.mount):
             raise ShelfDamaged(f"Ollama wrote {path} differently from the copy on {shelf.name}")
         f.local_ns = mtime_ns(path) if os.path.exists(path) else None
 
@@ -186,13 +188,32 @@ def _link(path: str, target: str) -> None:
         shutil.copyfile(os.path.join(os.path.dirname(path), target), path)
 
 
-def _on_computer(entry: ShelfModel, f: ShelfFile) -> bool:
+def _on_computer(entry: ShelfModel, f: ShelfFile, mount: str | None = None) -> bool:
     path = _local(entry, f.rel)
     if unchanged(path, f, "local"):
         return True
+    if mount and entry.tool == "ollama" and f.rel.startswith("manifests/") and os.path.isfile(path):
+        return same_layers(path, catalog.drive_file(mount, entry, f.rel))
     if not os.path.isfile(path) or os.path.getsize(path) != f.bytes:
         return False
     return sha256_of(path, direct=False, stop=Options().stop) == f.sha256
+
+
+def same_layers(local: str, drive: str) -> bool:
+    """Two Ollama manifests for one model: the same config and layers, in order. Since 0.40 Ollama
+    writes a pulled manifest in its own form, so its bytes may differ from the registry's (D-024)."""
+    try:
+        with open(local, encoding="utf-8") as a, open(drive, encoding="utf-8") as b:
+            mine, theirs = json.load(a), json.load(b)
+    except (OSError, ValueError):
+        return False
+
+    def digests(data: dict[str, Any]) -> list[str]:
+        config = cast(dict[str, Any], data.get("config") or {})
+        layers = cast(list[dict[str, Any]], data.get("layers") or [])
+        return [str(config.get("digest")), *(str(x.get("digest")) for x in layers)]
+
+    return digests(mine) == digests(theirs)
 
 
 def _local(entry: ShelfModel, rel: str) -> str:
@@ -218,7 +239,7 @@ def remove(run: Run, keys: list[str], drive: str | None = None, only_copy: bool 
             result.failed[key] = f"plug in {found.shelf.name} to remove it"
             continue
         entry = found.shelf.models[key]
-        if not only_copy and not all(_on_computer(entry, f) for f in entry.files):
+        if not only_copy and not all(_on_computer(entry, f, found.mount) for f in entry.files):
             name = entry.names[0]
             result.failed[key] = (
                 f"{name} is only on {found.shelf.name}: removing it loses it. Bring it back first, "

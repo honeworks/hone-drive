@@ -10,9 +10,11 @@ drive, so the model is the one that was moved."""
 from __future__ import annotations
 
 import contextlib
+import errno
 import json
 import os
 import re
+import socket
 import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -68,14 +70,37 @@ class _Registry:
             if rel.startswith("blobs/")
         }
         handler = type("Handler", (_Handler,), {"manifest": self.manifest, "blobs": blobs})
-        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-        self.httpd.daemon_threads = True
-        self.port = int(self.httpd.server_address[1])
-        threading.Thread(target=self.httpd.serve_forever, name="hone-drive registry", daemon=True).start()
+        self.servers = _listen(handler)
+        self.port = int(self.servers[0].server_address[1])
+        for httpd in self.servers:
+            threading.Thread(target=httpd.serve_forever, name="hone-drive registry", daemon=True).start()
 
     def close(self) -> None:
-        self.httpd.shutdown()
-        self.httpd.server_close()
+        for httpd in self.servers:
+            httpd.shutdown()
+            httpd.server_close()
+
+
+class _Server6(ThreadingHTTPServer):
+    address_family = socket.AF_INET6
+
+
+def _listen(handler: type[BaseHTTPRequestHandler]) -> list[ThreadingHTTPServer]:
+    """The registry on 127.0.0.1 and, on the same port, on ::1, since `localhost` (where blobs are sent
+    from) may be either; loopback only, never another interface."""
+    for _ in range(20):
+        four = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        four.daemon_threads = True
+        try:
+            six = _Server6(("::1", int(four.server_address[1])), handler)
+        except OSError as exc:
+            if exc.errno == errno.EADDRINUSE:
+                four.server_close()
+                continue
+            return [four]  # no IPv6 loopback: localhost is 127.0.0.1 only
+        six.daemon_threads = True
+        return [four, six]
+    raise OSError("no free port on both loopback addresses")
 
 
 class _Handler(BaseHTTPRequestHandler):

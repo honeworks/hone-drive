@@ -529,8 +529,8 @@ are still listed. The catalog carries `format: 1`.
 another user write into the ones it makes later. With Ollama running, hone-drive only needs to read its
 folder: Ollama's server removes a model (`DELETE /api/delete`), and takes one back itself: hone-drive
 serves the drive's copy as a registry on 127.0.0.1 for one pull, Ollama pulls it (checking every blob),
-copies it to its original names and drops the temporary name, and the manifest it wrote must match the
-catalog's byte for byte (decision D-024). Where the folder is this user's (macOS, Windows, a user's own
+copies it to its original names and drops the temporary name, and the manifest it wrote must list the
+same config and layers as the drive's (decision D-024). Where the folder is this user's (macOS, Windows, a user's own
 Ollama), files are copied directly.
 
 **Bringing back** copies each file to its original place the same way, checked against the catalog's
