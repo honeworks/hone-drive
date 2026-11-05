@@ -39,6 +39,7 @@ class FakeOllama:
     pulled: list[str] = field(default_factory=list[str])
     fail_pull: bool = False  # answer a pull with Ollama's error
     wrong_copy: bool = False  # write a copied manifest with another layer
+    fail_delete: bool = False  # answer a delete with Ollama's error, removing nothing
 
     def fetch(self, url: str) -> bytes | None:
         if url.endswith("/api/ps"):
@@ -52,6 +53,8 @@ class FakeOllama:
     def send(self, method: str, url: str, body: dict[str, object] | None) -> bytes | None:
         body = body or {}
         if method == "DELETE" and url.endswith("/api/delete"):
+            if self.fail_delete:
+                return b'{"error":"model is in use"}'
             self.deleted.append(str(body["model"]))
             if self.running and self.models:
                 manifest_path(self.models, str(body["model"])).unlink(missing_ok=True)

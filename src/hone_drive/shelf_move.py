@@ -15,7 +15,7 @@ from typing import Literal
 from hone_drive import access, text
 from hone_drive import shelf_catalog as catalog
 from hone_drive.errors import NotFound, ShelfDamaged, ShelfRefused, Stopped
-from hone_drive.model import Run, Volume
+from hone_drive.model import CacheBypass, Run, Volume
 from hone_drive.ollama_server import answers
 from hone_drive.presentation import volume_names
 from hone_drive.shelf_busy import Busy, in_use, look
@@ -269,20 +269,21 @@ def _place(
     if known is not None and unchanged(dest, known, "drive") and unchanged(source, known, "local"):
         return known
     before = os.stat(source)  # the time recorded is the one the hashed bytes had
+    found: tuple[str, CacheBypass] | None = None
     if os.path.exists(dest) and os.path.getsize(dest) == before.st_size:
         mine = sha256_of(source, direct=False, stop=options.stop)
         if sha256_of(dest, direct=True, stop=options.stop, progress=tick) == mine:
-            _still(source, before)
-            return ShelfFile(
-                rel=rel, bytes=before.st_size, sha256=mine, drive_ns=mtime_ns(dest),
-                local_ns=before.st_mtime_ns, cache=read_back_cache(dest),
-            )  # fmt: skip
-    digest, cache = copy_checked(source, dest, options.stop, tick)
+            found = mine, read_back_cache(dest)
+    digest, cache = found or copy_checked(source, dest, options.stop, tick)
     _still(source, before)
     return ShelfFile(
-        rel=rel, bytes=before.st_size, sha256=digest, drive_ns=mtime_ns(dest),
-        local_ns=before.st_mtime_ns, cache=cache,
-    )  # fmt: skip
+        rel=rel,
+        bytes=before.st_size,
+        sha256=digest,
+        drive_ns=mtime_ns(dest),
+        local_ns=before.st_mtime_ns,
+        cache=cache,
+    )
 
 
 def _still(source: str, before: os.stat_result) -> None:

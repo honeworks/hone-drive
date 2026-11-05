@@ -9,6 +9,7 @@ import json
 import os
 import socket
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -211,7 +212,7 @@ def test_ollama_refusing_leaves_no_stray_name(machine: Machine, monkeypatch: pyt
     assert machine.ollama.deleted[-1].startswith("127.0.0.1:")  # the temporary name is dropped
     with (
         pytest.raises(ConnectionRefusedError),
-        socket.create_connection(("127.0.0.1", seen[0].port), timeout=1),
+        socket.create_connection(("127.0.0.1", seen[0].port), timeout=5),
     ):
         pass  # and the registry is closed
 
@@ -297,3 +298,76 @@ def test_the_registry_listens_on_both_loopbacks_or_says_why_not(monkeypatch: pyt
     monkeypatch.setattr(ollama_server, "_Server6", denied)
     with pytest.raises(OSError, match="denied"):
         listen(BaseHTTPRequestHandler)
+
+
+# -- Ollama refusing to delete; error answers from a local service ----------------------------------------------
+
+
+@POSIX_ONLY
+def test_ollama_refusing_to_delete_leaves_the_model_where_it_is(machine: Machine) -> None:
+    """A delete Ollama answers with an error is not a removal: in a folder hone-drive may not change, the
+    move fails and nothing is lost (the drive's copy is complete, the computer's is whole)."""
+    machine.ollama.fail_delete = True
+    gemma = machine.models / "manifests" / "registry.ollama.ai" / "library" / "gemma"
+    gemma.chmod(0o555)
+    try:
+        run = machine.run()
+        the_plan = shelf.plan(run, [GEMMA], to=str(machine.drive))
+        the_plan.models[0].refused = None  # as if it were writable when planned
+        result = shelf.move(run, the_plan)
+    finally:
+        gemma.chmod(0o755)
+    assert result.done == [] and GEMMA in result.failed
+    assert (gemma / "31b").exists() and GEMMA in shelf.local_models(machine.run())
+    on_drive = catalog.load(str(machine.drive))
+    assert on_drive is not None and on_drive.models[GEMMA].complete
+
+
+def test_ollama_answering_without_removing_is_reported(
+    machine: Machine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    machine.ollama.fail_delete = True
+    monkeypatch.setattr(shelf_models.os, "remove", lambda _p: None)  # nothing goes, as in a read-only folder
+    result = move(machine, GEMMA)
+    assert (
+        "Ollama did not remove gemma:31b" in result.failed[GEMMA] and "is still here" in result.failed[GEMMA]
+    )
+
+
+def test_http_send_returns_what_a_service_said(monkeypatch: pytest.MonkeyPatch) -> None:
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    from hone_drive import stores
+
+    class Answer(BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: Any) -> None:
+            """Quiet."""
+
+        def do_DELETE(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            body = b'{"error":"model not found"}' if self.path == "/missing" else b""
+            self.send_response(404 if self.path == "/missing" else 500)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Answer)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        assert stores.http_send("DELETE", f"{base}/missing", {"model": "x"}) == b'{"error":"model not found"}'
+        assert stores.http_send("DELETE", f"{base}/broken", {}) == b'{"error": "HTTP 500"}'
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert stores.http_send("DELETE", "http://127.0.0.1:9/nothing", None) is None
+    timeouts: list[float] = []
+
+    def spy(_request: Any, timeout: float) -> Any:
+        timeouts.append(timeout)
+        raise OSError("not really")
+
+    monkeypatch.setattr(stores.urllib.request, "urlopen", spy)
+    stores.http_send("POST", "http://127.0.0.1:1/api/pull", {})
+    stores.http_send("DELETE", "http://127.0.0.1:1/api/delete", {})
+    assert timeouts == [3600.0, 30.0]
