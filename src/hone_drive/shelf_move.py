@@ -76,6 +76,11 @@ class Result:
     stopped: bool = False
 
 
+def refusals(plans: list[Plan]) -> dict[str, str]:
+    """What a plan refused, by key: a result reports them with what failed, so no refusal goes unseen."""
+    return {p.key: p.refused for plan in plans for p in plan.models if p.refused}
+
+
 def context(run: Run) -> Context:
     return Context(os_name=run.machine.os, home=os.path.expanduser("~"))
 
@@ -115,7 +120,7 @@ def plan(
     for key in keys:
         model = local.get(key)
         if model is None:
-            result.models.append(Planned(key, [key], key.split(":")[0], 0, refused="not on this computer"))
+            result.models.append(_not_here(key, shelf))
             continue
         item = Planned(key, model.names, model.tool, model.bytes, replaceable=model.replaceable)
         item.copy_bytes = _to_copy(model, shelf, volume.mount)
@@ -128,6 +133,14 @@ def plan(
             free -= item.copy_bytes
         result.models.append(item)
     return result
+
+
+def _not_here(key: str, shelf: Shelf | None) -> Planned:
+    """A model that isn't on the computer: moved already (nothing to do, guarantee 18), or unknown."""
+    entry = shelf.models.get(key) if shelf else None
+    if entry is not None and entry.complete:
+        return Planned(key, entry.names, entry.tool, sum(f.bytes for f in entry.files))
+    return Planned(key, [key], key.split(":", maxsplit=1)[0], 0, refused="not on this computer")
 
 
 def _refusal(
@@ -185,10 +198,15 @@ def move(run: Run, the_plan: Plan, options: Options | None = None, ctx: Context 
     """Copy each planned model to the drive, check it, record it, and then remove it from the computer."""
     options, ctx = options or Options(), ctx or context(run)
     local = local_models(run)
-    result = Result()
+    result = Result(failed=refusals([the_plan]))
+    if not the_plan.ready:
+        return result
     with catalog.locked(the_plan.mount):
         shelf = catalog.open_shelf(the_plan.mount, the_plan.drive)
         for item in the_plan.ready:
+            if item.key not in local:  # already on the drive and gone from here: moved before
+                result.done.append(item.key)
+                continue
             try:
                 _move_one(shelf, local[item.key], options, ctx)
             except Stopped:

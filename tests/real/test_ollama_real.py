@@ -150,13 +150,19 @@ def test_a_real_ollama_model_leaves_and_comes_back(ollama: Ollama) -> None:
     the_run = ollama.run()
     the_plan = shelf.plan(the_run, [key], to=str(ollama.drive), ctx=ollama.ctx, busy=Busy)
     assert the_plan.models[0].refused is None, the_plan
-    assert shelf.move(the_run, the_plan, ctx=ollama.ctx).done == [key]
+    moved = shelf.move(the_run, the_plan, ctx=ollama.ctx)
+    assert moved.done == [key], moved
     assert name not in ollama.listed()  # Ollama itself no longer has it
     if ollama.models is not None:
         assert not list((ollama.models / "blobs").iterdir())  # and its blobs left the computer
-    assert shelf.restore(ollama.run(), [key]).done == [key]
+    restored = shelf.restore(ollama.run(), [key])
+    assert restored.done == [key], restored
     after = ollama.listed()
-    assert after.get(name) == before[name], (version, before, after, on_disk, manifests(ollama))
+    assert name in after, (version, before, after)
+    # the manifest Ollama reads is byte for byte the one it had (its own listing digest can differ: since
+    # 0.40 Ollama reports a pulled model's registry digest until it re-reads the folder)
+    assert manifests(ollama) == on_disk, (version, before, after)
     answer = ollama.call("/api/embed", {"model": name, "input": "hello", "keep_alive": 0})
     assert answer["embeddings"] and len(answer["embeddings"][0]) > 10
-    assert shelf.remove(ollama.run(), [key]).done == [key]  # on the computer again: the drive may let go
+    removed = shelf.remove(ollama.run(), [key])
+    assert removed.done == [key], removed  # on the computer again: the drive may let go

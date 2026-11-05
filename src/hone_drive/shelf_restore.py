@@ -14,7 +14,7 @@ from hone_drive.errors import NotFound, ShelfDamaged, Stopped
 from hone_drive.model import Run
 from hone_drive.shelf_catalog import Shelf, ShelfFile, ShelfModel
 from hone_drive.shelf_copy import copy_checked, mtime_ns, read_back_cache, sha256_of, unchanged
-from hone_drive.shelf_move import MARGIN, Options, Plan, Planned, Result, Tick
+from hone_drive.shelf_move import MARGIN, Options, Plan, Planned, Result, Tick, refusals
 from hone_drive.volumes import mount_of
 
 
@@ -90,8 +90,10 @@ def _restore_refusal(run: Run, found: OnDrive, entry: ShelfModel) -> tuple[str |
 def restore(run: Run, plans: list[Plan], options: Options | None = None) -> Result:
     """Copy each planned model back to where it was, checked against the catalog's SHA-256."""
     options = options or Options()
-    result = Result()
+    result = Result(failed=refusals(plans))
     for the_plan in plans:
+        if not the_plan.ready:
+            continue
         with catalog.locked(the_plan.mount):
             shelf = catalog.load(the_plan.mount)
             if shelf is None:
@@ -135,6 +137,7 @@ def _restore_one(shelf: Shelf, entry: ShelfModel, options: Options) -> None:
 def _link(path: str, target: str) -> None:
     """A Hugging Face snapshot link; a copy where the OS refuses links (Windows without the right)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    target = target.replace("/", os.sep)  # the catalog says "/"; a Windows link needs "\\"
     try:
         os.symlink(target, path)
     except OSError:

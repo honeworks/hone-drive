@@ -269,3 +269,16 @@ def test_ollama_sized_by_its_server_needs_the_fix_first(machine: Machine) -> Non
     ollama.source = "ollama api"  # what a scan finds when the folder belongs to the service's user
     planned = {p.key: p for p in shelf.plan(run, [GEMMA], to=str(machine.drive)).models}
     assert "can't read" in (planned[GEMMA].refused or "")
+
+
+def test_refusals_are_reported_with_the_result(machine: Machine) -> None:
+    move(machine, WAN)
+    run = machine.run()
+    run.volumes = run.volumes[:1]  # unplugged
+    result = shelf.restore(run, [WAN])
+    assert result.done == [] and "plug in" in result.failed[WAN]
+    assert not Path("hone-drive").exists()  # no lock taken on an empty mount point
+    machine.ollama.loaded = ["gemma:31b"]
+    run = machine.run()
+    refused = shelf.move(run, shelf.plan(run, [GEMMA], to=str(machine.drive)))
+    assert "loaded" in refused.failed[GEMMA]

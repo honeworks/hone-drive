@@ -110,7 +110,9 @@ def _huggingface(store: Store, item: Item) -> LocalModel | None:
             path = os.path.join(folder, name)
             rel = os.path.relpath(path, store.path).replace(os.sep, "/")
             if os.path.islink(path):
-                model.links.append((rel, os.readlink(path)))
+                model.links.append(
+                    (rel, os.readlink(path).replace(os.sep, "/"))
+                )  # "/" in the catalog, on every OS
             else:
                 model.files.append(rel)
                 model.bytes += os.path.getsize(path)
