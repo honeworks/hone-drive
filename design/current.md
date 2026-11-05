@@ -98,7 +98,7 @@ are never written with a decimal comma (history §2).
 | Thunderbolt / USB4 link | `/sys/bus/thunderbolt/devices/*` | `system_profiler SPThunderboltDataType -json` | unknown in 0.1 |
 | NVMe PCIe link | `/sys/class/nvme/*/device/current_link_speed`, `_width`, `max_link_*` | `system_profiler SPNVMeDataType -json` (link width and speed) | unknown in 0.1 |
 | GPUs | `nvidia-smi`, `/sys/class/drm` | `system_profiler SPDisplaysDataType -json` | `Get-CimInstance Win32_VideoController`, `nvidia-smi` |
-| SMART health (optional) | `smartctl -j` when installed and permitted | same | same |
+| SMART health | not read in 0.1 (§16, decision D-017) | same | same |
 
 Every probe command is optional: a missing tool or a refusal gives `None` with the reason, and the rest of
 the scan goes on.
@@ -223,9 +223,11 @@ Every read and write test bypasses the operating system's cache, or says it coul
 | macOS | `fcntl(F_NOCACHE)` on the file |
 | Windows | `CreateFileW` with `FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH` through `ctypes`, aligned buffers |
 
-When direct I/O is refused (some filesystems do), the test falls back to a file at least twice the
-machine's RAM and marks the measurement `cache: fallback`; when even that does not fit, it is marked
-`cache: possibly cached` and shown greyed out. `model-read` uses the same flags, so a model file read a
+When direct I/O is refused (tmpfs and some FUSE filesystems), Linux writes through the cache and then
+asks the kernel to drop the file's pages (`posix_fadvise(DONTNEED)`) before reading it back, and marks
+the measurement `cache: fallback`; on macOS and Windows, which have no such call, it is marked
+`cache: possibly-cached`, carries a warning, is shown greyed out and is never used for an estimate
+(decision D-019). `model-read` uses the same flags, so a model file read a
 minute ago is not measured from RAM. Throughput is computed from monotonic timestamps in Python, never
 parsed from another tool's output (history §2).
 
@@ -246,7 +248,8 @@ parsed from another tool's output (history §2).
 
 Each measurement is compared with the link's expected speed (§4.2) and, for internal drives, with the
 fill level (§4.4). The dashboard labels it `link-bound`, `drive-bound`, `cache exhausted after N GB`
-(from the sustained curve) or `throttling` (a drop after a steady stretch).
+(from the sustained curve), `throttling after N s` (a drop after a steady stretch) or `steady`
+(decision D-020).
 
 ## 7. Estimates
 
@@ -317,7 +320,7 @@ tones and the plan on the server; the page only draws.
 | Plan | what was found (full, slow), then the advice as ordered steps: clean caches, prepare the external drive, move model folders, get full speed, find hidden space; each task with what it frees, a checkbox kept in the browser, and "How to do it" with the commands and their risks |
 | Space | a bar per drive with each store in its fixed colour, a table of the same, the biggest single things, and the two slow scans (hidden space, duplicates) as buttons with what they do |
 | Drives & speed | read and write speed compared across drives, then each drive's card with its filesystem and startup notes and its technical details |
-| Models | every model with its tool, size and drive, and its load time from each drive (estimated from the connection until the drive is tested, and labelled so) |
+| Models | every model with its tool, size and drive, and its load time from each drive (estimated from the connection until the drive is tested, and labelled so), with a note when it fits in the memory free now and may load warm (§7) |
 | History | compare two scans, open an older one, download a report to share |
 
 Charts are inline SVG and HTML drawn by the page, in the dataviz reference palette for light and dark

@@ -12,7 +12,7 @@ keywords = [
     "honeworks",
 ]
 classifiers = [
-    "Development Status :: 1 - Planning",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
