@@ -7,10 +7,7 @@ refer to them by number. Entries marked **awaiting owner review** are proposals 
 
 | Entry | Question for the owner |
 |---|---|
-| D-017 | SMART health is left out of 0.1; keep it out, or read it when `smartctl` runs without a password? |
 | D-019 | design §6.2 now describes the cache fallback the code has, instead of a file twice the size of RAM: keep this? |
-| D-020 | the thresholds that call a sustained write "throttling": keep them? |
-| D-021 | guarantee 11 now exempts A09 from commands, and A01 and A04 show hone-drive's own commands: keep this? |
 
 On 2026-10-18 the owner accepted design 0001 ("accepted"), and with it every open question with its
 proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
@@ -163,8 +160,10 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   installed by default, so it would be "unknown" almost everywhere; design §16 says so.
 - **Why:** AGENTS.md rule 3 (no administrator rights). A later change can read it when the user has set
   up `smartctl` to run without a password.
-- **Status:** a deviation from the accepted design, **awaiting owner review**. Design §3.2 and §16 say
-  so.
+- **Status:** answered by the owner on 2026-11-05: hone-drive should read SMART health, and show per OS
+  how to install `smartctl` and allow hone-drive to use it ("then we should have it"). That needs its own
+  change record (a new data source, new instructions, possibly new advice); until it is built, 0.1 reads no
+  SMART health, as design §3.2 and §16 say.
 
 ## D-018: A05 speaks only about volumes that matter  (2026-10-18)
 
@@ -194,15 +193,21 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
 - **Why:** design §6.4 names the label ("a drop after a steady stretch") without numbers. ±15% is the
   tolerance design §4.2 already uses for "link-bound", and three seconds keep one slow second from
   counting. Not yet checked against a real throttling drive.
-- **Status:** awaiting owner review.
+- **Status:** the owner left the numbers open on 2026-11-05 ("I don't know"); they stand as provisional
+  until a sustained-write curve from a real throttling drive confirms or changes them.
 
 ## D-021: which advice has commands (guarantee 11)  (2026-11-05)
 
 - **Question:** guarantee 11 says every advice item has commands for the current OS; A01 (full), A04
   (slow because full) and A09 (keep this file here) had none.
-- **Choice:** A01 shows `hone-drive scan --account` (what fills the drive) and A04
-  `hone-drive bench <mount> --tests seq` (check the speed after freeing space). A09 asks only to leave a
-  file where it is, so guarantee 11 exempts it rather than inventing a command.
-- **Why:** a command that measures again is useful for a finding; a made-up one for "do nothing" is not.
-- **Status:** awaiting owner review.
+- **Choice:** guarantee 11 asks for commands on every item that asks the user to act (`warn` and
+  `suggest`); an `info` item may only inform (today A09, "keep this file where it is"). A01 shows
+  `hone-drive scan --account` (what fills the drive) and A04 `hone-drive bench <mount> --tests seq`
+  (check the speed after freeing space). A rule whose OS has no commands written yet gives no advice on
+  that OS (A06 on macOS and Windows) instead of an item with nothing to run.
+- **Why:** a rule by severity is one a contributor adding an advice rule can follow and a test can check
+  for every rule on every OS (`test_ac11_every_item_that_asks_for_action_has_commands`), where a list of
+  named exceptions grows silently; a made-up command for "do nothing" helps no one.
+- **Status:** the owner left it to the implementer on 2026-11-05 ("you decide what's best for an open
+  source project").
 

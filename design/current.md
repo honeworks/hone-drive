@@ -405,7 +405,8 @@ everything; they never leave the machine unless the user shares a report.
 10. A load-time estimate for an item uses the measured read of its volume and is labelled "disk time
     only"; without a measurement it uses the link's expected speed and says so.
 11. Advice never runs a command; every advice item has its rule, why with measurement ids, and commands
-    for the current OS, except A09, which only asks to leave a file where it is (decision D-021).
+    for the current OS when it asks the user to act (`warn`, `suggest`); an `info` item may only inform
+    (decision D-021).
 12. Two different-format copies of one model (GGUF and safetensors) are never reported as duplicates;
     byte-identical files in two stores are.
 13. A report removes serials, UUIDs, user name, home path and host name unless `--keep-private` is given.

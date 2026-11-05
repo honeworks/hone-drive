@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from hone_drive.advice import RULES, advise
 from hone_drive.model import Accounting, Duplicate, Item, Measurement, Run, Store, TestName
 from hone_drive.scanner import scan
@@ -194,3 +196,14 @@ def test_ac11_findings_show_the_command_that_checks_them() -> None:
     items = {a.rule: a for a in advise(run, HOME)}
     assert items["A01"].commands["linux"] == ["hone-drive scan --account"]
     assert items["A04"].commands["linux"] == ["hone-drive bench / --tests seq"]
+
+
+@pytest.mark.parametrize("os_name", ["linux", "macos", "windows"])
+def test_ac11_every_item_that_asks_for_action_has_commands(os_name: str) -> None:
+    """AC11 (decision D-021): `warn` and `suggest` items have commands for the OS; `info` items inform only."""
+    run = reference_run()
+    run.machine.os = os_name  # type: ignore[assignment]
+    found = advise(run, HOME)
+    assert {a.severity for a in found} >= {"warn", "suggest", "info"}
+    for item in found:
+        assert item.severity == "info" or item.commands.get(os_name), (item.rule, item.title)
