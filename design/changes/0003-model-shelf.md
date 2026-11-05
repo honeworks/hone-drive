@@ -4,7 +4,8 @@
 
 `proposed 2026-11-05`. Asked for by the owner the same day ("I want it to move models to the drive. Copy,
 make sure the model is copied ok, delete from machine. Then I want to be able to select I want this model,
-and it should copy it back"), with the answers recorded below.
+and it should copy it back"), with the answers recorded below; the open questions of the first draft were
+answered the same day (see "The owner's answers to the first draft").
 
 ## Context
 
@@ -104,12 +105,16 @@ plugged in (answer 5).
    tools, a process of this user has the file open (psutil, best effort, said so). Refuse also when the
    drive lacks the room (the missing files plus 10% plus 2 GiB, as design §6.3 rule 2) or the access
    check below fails.
-2. **Compare first** (idempotence): every file already on the drive under the catalog with the same size
-   is hashed on the drive, and every local file is hashed; matching files are not copied again.
+2. **Compare first** (idempotence), trusting the catalog: a file the catalog lists as checked, whose size
+   and modification time on the drive and on the computer are still the ones the catalog recorded when
+   it was checked, is the same and is not copied or read again. Any other file is hashed on both sides;
+   matching files are not copied again.
 3. **Copy** what is missing or different to `<name>.part`, hashing as it reads; `fsync`, then rename.
 4. **Check**: read the copy back from the drive with the page cache bypassed (`directio`, design §6.2) and
    compare its SHA-256 with the local file's. For Ollama blobs the expected hash is also the blob's name.
-5. Mark the model `on drive` in `shelf.json` (written atomically, then copied to the data folder).
+   Every new copy is checked this way; only step 2's comparison of earlier copies trusts the catalog.
+5. Mark the model `on drive` in `shelf.json` with each file's hash, size and modification time on both
+   sides (written atomically, then copied to the data folder).
 6. **Remove it from the computer** (skipped with `--keep-local`):
    - Ollama: through its server (`DELETE /api/delete`) when it answers, so Ollama itself drops the
      manifest and the blobs no other model uses; otherwise the manifest and those blobs directly;
@@ -117,15 +122,24 @@ plugged in (answer 5).
 7. Mark it `shelved`. A model is never removed from the computer before step 5 is on the drive.
 
 Running it again on a shelved model does nothing; on a model that came back and is still on the drive,
-step 2 finds every file and the move is a check and a delete.
+step 2 finds every file unchanged and the move is only a delete (a second or two).
 
 ### Bringing a model back
 
 The same steps the other way: room on the computer, copy to `.part` in the model's original folder,
 check against the catalog's SHA-256 with the cache bypassed, rename into place; for Hugging Face recreate
 the snapshot links; for Ollama put the blobs and then the manifest in the store's folder (the manifest
-last, so Ollama never lists a model whose blobs are missing). The drive's copy is **kept** (see open
-question 1), so moving it to the drive again later is only a check and a delete.
+last, so Ollama never lists a model whose blobs are missing). Bringing back **only copies**: it never
+removes anything from the drive (owner, 2026-11-05: "We never delete a model ... bringing it back is
+never part of copying to system"). Moving the model to the drive again later is then only a delete.
+
+### Removing a model from the drive
+
+A separate action, "Remove from drive", is the only way anything leaves the drive. It never touches the
+computer's copy. When the drive holds the **only** copy (the model is not on the computer, or not with the
+same bytes), it refuses unless the user confirms that the model will be gone (the dashboard asks them to
+type the model's name; the CLI needs `--only-copy`). Ollama blobs other shelved models list stay on the
+drive.
 
 ### Checking access per system (answer 2)
 
@@ -137,13 +151,16 @@ fails it says what and shows the command that fixes it **on this system**, built
 
 | Found | Command shown (never run) |
 |---|---|
-| Linux, folder owned by a service user whose group the user is in, `setfacl` installed | `sudo setfacl -R -m g:ollama:rwX -m d:g:ollama:rwX /usr/share/ollama` (the group may read and write, also files Ollama adds later) |
-| Linux, user not in that group | `sudo usermod -aG ollama $USER`, log out and in, then the line above |
-| Linux, no `setfacl` | the package that provides it (`acl` on pacman, apt and dnf), or `chmod -R g+rwX` with the note that new models need it again |
+| Linux, folder owned by a service user (Ollama's `ollama`), `setfacl` installed | `sudo setfacl -R -m u:<user>:rwX,d:u:<user>:rwX,d:u:ollama:rwX /usr/share/ollama`, with the real user name filled in (this user, and no one else, may read and write it, also files added later; files this user brings back stay readable by Ollama) |
+| Linux, no `setfacl`, or a filesystem without ACLs | the package that provides it (`acl` on pacman, apt and dnf); without ACLs, run the service as this user instead (the systemd override is shown) |
 | macOS, folder not readable | `sudo chmod -R +a "<user> allow read,write,delete,add_file,add_subdirectory,list,search,file_inherit,directory_inherit" <folder>` |
 | Windows, folder not readable | `icacls "<folder>" /grant "<user>":(OI)(CI)M /T` in an administrator PowerShell |
 | ComfyUI or Ollama running and the model in use | which one, and "close it or unload the model, then try again" |
 
+Why a rule for one user and not the service's group (owner's question 3: "pick the best option"): a
+group rule would also let anyone added to that group later change model files; running Ollama as the
+user would change their service setup and move 388 GB. A rule naming only this user changes nothing
+else, Ollama keeps running as it is, and `sudo setfacl -R -x u:<user>,d:u:<user> /usr/share/ollama` undoes it.
 On the reference machine the first row applies; on a Linux machine where Ollama runs as the user, on
 macOS and on Windows the check usually passes with nothing to do. The check runs again when the user
 clicks "Check again", so they see when the fix worked.
@@ -170,7 +187,9 @@ plan = shelf.plan(run, ["ollama:gemma4:31b", "comfyui:diffusion_models/wan2.2.sa
                   to="/run/media/user/PNYRP60PSSD")  # what would be copied, checked, removed; nothing changes
 shelf.move(run, plan)                               # copy, check, remove from the computer
 shelf.contents()                                    # every drive's shelf, connected or not
-shelf.restore(run, ["ollama:gemma4:31b"])           # copy back, check
+shelf.restore(run, ["ollama:gemma4:31b"])           # copy back, check; the drive keeps its copy
+shelf.remove("PNY", ["ollama:gemma4:31b"], only_copy=False)  # from the drive only; refused if it's the only copy
+shelf.verify("PNY")                                 # "Check drive": re-hash everything against the catalog
 ```
 
 ```
@@ -178,19 +197,23 @@ hone-drive shelf                          # what is on each drive, connected or 
 hone-drive shelf check [TOOL]             # can hone-drive move this tool's models here? the fix if not
 hone-drive shelf move MODEL... [--to DRIVE] [--keep-local] [--dry-run]
 hone-drive shelf restore MODEL... [--dry-run]
+hone-drive shelf remove MODEL... [--from DRIVE] [--only-copy]
+hone-drive shelf verify [DRIVE]
 ```
 
-The Models screen gets a checkbox per model, "Move to PNY RP60" and "Bring back", and a column saying
+The Models screen gets a checkbox per model, "Move to PNY RP60", "Bring back" and "Remove from drive", and a column saying
 where each model is (computer, drive, both). The progress bar is the benchmark's, in words ("checking
 gemma4:31b on PNY RP60, 12 of 19 GB"). Before a move, a confirmation lists what will be removed from the
 computer and the space it frees. A failed access check shows its fix in the same place.
 
 ### New guarantees (design §15)
 
-17. A file is removed from the computer only after its copy on the drive was read back with the page
-    cache bypassed and its SHA-256 matched the local file's, and the catalog on the drive records it.
+17. A file is removed from the computer only when the catalog on the drive records a copy that was read
+    back with the page cache bypassed and matched the local file's SHA-256, and neither file's size or
+    modification time changed since; otherwise both are hashed again first.
 18. Moving a model whose files are already on the drive with the same bytes copies nothing and only
     removes the local copy; moving or bringing back a model twice ends in the same state as once.
+    Bringing a model back never removes anything from the drive.
 19. A move or a restore stopped, failed or killed at any point leaves every model complete in at least
     one place, and the next run finishes it or cleans up after it.
 20. A model in use (loaded in Ollama, ComfyUI running, the file open in a process) is refused with the
@@ -204,10 +227,13 @@ computer and the space it frees. A failed access check shows its fix in the same
 24. A drive's shelf is listed when the drive is unplugged, and the drive is recognised by its id wherever
     it is mounted.
 25. A move is refused when the drive lacks the room or its filesystem can't hold a file.
+26. Removing a model from a drive never touches the computer's copy, and is refused without an explicit
+    confirmation when the drive holds the only copy.
 
 ### Tests
 
-- Unit: the catalog (reopened after writing), the compare-first step, shared Ollama blobs, Hugging Face
+- Unit: the catalog (reopened after writing), the compare-first step (a changed size or modification
+  time forces a hash), shared Ollama blobs, Hugging Face
   links on a filesystem without links, the access check with fake folders and permissions, the fix
   command per finding and OS, refusals.
 - Acceptance (`tests/e2e/test_ac17_...` to `test_ac25_...`): fake stores in temporary folders and a fake
@@ -228,9 +254,12 @@ computer and the space it frees. A failed access check shows its fix in the same
 - A model on the shelf is the only copy. The confirmation says so, and says which ones can be downloaded
   again (Ollama and Hugging Face models) and which may not (a ComfyUI file from elsewhere, a folder of
   the user's own).
-- Checking costs time: a first move reads the model on the computer once, writes it to the drive and
-  reads it back (19 GB at the reference machine's measured speeds: about 9 s, 21 s and 20 s); a repeated
-  move reads both copies once (about 30 s).
+- Checking costs time on the first move only: it reads the model on the computer once, writes it to the
+  drive and reads it back (19 GB at the reference machine's measured speeds: about 9 s, 21 s and 20 s). A
+  repeated move trusts the catalog and reads nothing when the files are unchanged. The catalog can't see
+  a file changed without its size or modification time changing (a disk fault, a tool that resets the
+  time); the drive's copy was checked when it was written, and "Check drive" re-hashes everything on
+  demand.
 - New modules: `shelf.py` (plan, move, restore, catalog), `shelf_stores.py` (what a model is per tool),
   `access.py` (the check and the fix commands). They write files, so they follow the benchmark's safety
   style (design §6.3) and stay outside the read-only probes.
@@ -245,13 +274,11 @@ New optional data only: the run is unchanged (the shelf lives on the drive and i
 an optional `Item.on_drive` (where a shelved model is) so the views can show it; runs written before read
 as before.
 
-## Open questions for the owner
+## The owner's answers to the first draft (2026-11-05)
 
-1. **After bringing a model back, keep its copy on the drive?** Proposed: yes, so moving it to the drive
-   again is only a check and a delete; "Remove from drive" is a separate action that frees the drive.
-2. **Checking before every removal:** proposed as above, hashing the local file and the drive's copy every
-   time (certain; about 30 s for a 20 GB model on the reference machine). The faster choice would trust the catalog's hash
-   when a file's size and modification time are unchanged.
-3. **Ollama on the reference machine:** the fix shown would give the `ollama` group (the owner is in it)
-   read and write on `/usr/share/ollama`. Anyone else in that group could then change model files. Is that
-   acceptable, or should the fix be to run Ollama as the owner's own user instead?
+1. Keep the drive's copy after bringing a model back: yes, bringing back never removes anything from the
+   drive; a separate "Remove from drive" action does ("We never delete a model. We can have a button for
+   deleting from drive").
+2. Checking before a removal: "Trust catalog" (compare-first, step 2; every new copy is still read back).
+3. Access to Ollama's service folder: "Pick the best option": a rule for this user only (see "Checking
+   access per system").
