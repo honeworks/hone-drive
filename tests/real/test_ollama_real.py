@@ -1,11 +1,15 @@
-"""The shelf with the real Ollama (change 0003, "Tests": `-m real`). Not in the default suite or CI: it
-starts a private `ollama serve` as this user (its own port and model folder, never the user's Ollama),
-pulls a small model from the network, and loads it, so run it by hand under the machine-wide lock:
+"""The shelf with the real Ollama (change 0003, `-m real`), on Linux, macOS and Windows.
 
-    scripts/gpu-lock.sh uv run pytest -m real
+- `private` (everywhere): a private `ollama serve` as this user, on its own port and folder, never the
+  user's own Ollama.
+- `system` (`HONE_DRIVE_REAL_OLLAMA=system`; CI installs Ollama on Linux with its own installer, as a
+  service of its own user, like the reference machine): the Ollama this machine runs. hone-drive can't
+  read its folder, says so with the fix for this system, CI runs the fix, and then the model moves.
 
-It moves the model to a "drive" folder, checks Ollama no longer lists it, brings it back, and checks Ollama
-lists it with the same digest and answers with it."""
+Each pulls a small model, moves it to the drive, checks Ollama no longer lists it and its files are gone,
+brings it back, and checks Ollama lists it with the same digest and answers with it.
+
+    scripts/gpu-lock.sh uv run pytest -m real"""
 
 from __future__ import annotations
 
@@ -15,46 +19,71 @@ import shutil
 import subprocess
 import time
 import urllib.request
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from hone_drive import shelf
-from hone_drive.filesystems import traits
-from hone_drive.model import Drive, Link, Volume
-from hone_drive.scanner import scan
+from hone_drive.model import Run
+from hone_drive.scanner import os_name
+from hone_drive.shelf_busy import Busy
 from hone_drive.store_ollama import find_ollama
 from hone_drive.stores import Context
-from hone_drive.testing import FakeProbe, reference_probe
-from hone_drive.volumes import disk_usage
+from tests.real.real_machine import ROOT, allowed, drive_folder, machine, run_fix
 
 pytestmark = pytest.mark.real
 MODEL = os.environ.get("HONE_DRIVE_REAL_MODEL", "all-minilm:22m")
-PORT = "127.0.0.1:11555"
-URL = f"http://{PORT}"
-ROOT = Path.home() / ".cache" / "hone-drive-real-test"  # on the real disk: /tmp is a small RAM disk
+MODE = os.environ.get("HONE_DRIVE_REAL_OLLAMA", "private")
 
 
-def call(path: str, body: dict[str, Any] | None = None, method: str = "POST") -> dict[str, Any]:
-    data = json.dumps(body).encode() if body is not None else None
-    request = urllib.request.Request(f"{URL}{path}", data=data, method=method if data else "GET")  # noqa: S310
-    with urllib.request.urlopen(request, timeout=600) as response:  # noqa: S310 - the private server
-        text = response.read().decode()
-    return json.loads(text.strip().splitlines()[-1]) if text.strip() else {}
+@dataclass
+class Ollama:
+    url: str
+    ctx: Context
+    run: Callable[[], Run]
+    drive: Path
+    models: Path | None  # the folder, when this user can see it
+
+    def call(self, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        data = json.dumps(body).encode() if body is not None else None
+        request = urllib.request.Request(  # noqa: S310 - a local server
+            f"{self.url}{path}", data=data, method="POST" if data else "GET"
+        )
+        with urllib.request.urlopen(request, timeout=900) as response:  # noqa: S310
+            text = response.read().decode().strip()
+        return json.loads(text.splitlines()[-1]) if text else {}
+
+    def listed(self) -> dict[str, str]:
+        return {m["name"]: m["digest"] for m in self.call("/api/tags")["models"]}
+
+
+def wait(url: str) -> None:
+    for _ in range(150):
+        try:
+            urllib.request.urlopen(f"{url}/api/version", timeout=2).close()  # noqa: S310
+            return
+        except OSError:
+            time.sleep(0.2)
+    raise AssertionError(f"Ollama did not answer at {url}")
 
 
 @pytest.fixture
-def ollama(monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+def ollama(monkeypatch: pytest.MonkeyPatch) -> Iterator[Ollama]:
+    allowed()
     if shutil.which("ollama") is None:
         pytest.skip("ollama is not installed")
-    if not os.environ.get("HONE_GPU_LOCK_HELD"):
-        pytest.skip("run it through scripts/gpu-lock.sh: it loads a model")
-    shutil.rmtree(ROOT, ignore_errors=True)
+    drive = drive_folder()
+    if MODE == "system":
+        yield system(drive)
+        return
+    shutil.rmtree(ROOT / "models", ignore_errors=True)
     models = ROOT / "models"
     models.mkdir(parents=True)
-    env = {**os.environ, "OLLAMA_HOST": PORT, "OLLAMA_MODELS": str(models)}
+    host = "127.0.0.1:11555"
+    env = {**os.environ, "OLLAMA_HOST": host, "OLLAMA_MODELS": str(models)}
     server = subprocess.Popen(
         ["ollama", "serve"],  # noqa: S607 - the ollama on PATH is the one under test
         env=env,
@@ -62,59 +91,57 @@ def ollama(monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
         stderr=subprocess.DEVNULL,
     )
     try:
-        for _ in range(100):
-            try:
-                call("/api/version", method="GET")
-                break
-            except OSError:
-                time.sleep(0.2)
-        call("/api/pull", {"model": MODEL, "stream": False})
+        wait(f"http://{host}")
         monkeypatch.setattr("hone_drive.store_ollama.DEFAULTS", {"linux": [], "macos": [], "windows": []})
-        yield models
+        ctx = Context(
+            os_name=os_name(), home=str(Path.home()), env={"OLLAMA_MODELS": str(models), "OLLAMA_HOST": host}
+        )
+        found = Ollama(
+            f"http://{host}", ctx, machine([models], drive, {"ollama": find_ollama}, ctx), drive, models
+        )
+        found.call("/api/pull", {"model": MODEL, "stream": False})
+        yield found
     finally:
         server.terminate()
         server.wait(30)
         shutil.rmtree(ROOT, ignore_errors=True)
+        shutil.rmtree(drive, ignore_errors=True)
 
 
-def machine(models: Path) -> tuple[Context, Any]:
-    drive = ROOT / "drive"
-    drive.mkdir(exist_ok=True)
-    ctx = Context(
-        os_name="linux", home=str(Path.home()), env={"OLLAMA_MODELS": str(models), "OLLAMA_HOST": PORT}
-    )
-    volumes = []
-    for path, drive_id in ((models, "int"), (drive, "ext")):
-        total, used, free = disk_usage(str(path))
-        volumes.append(
-            Volume(mount=str(path), device=str(path), drive_id=drive_id, filesystem="ext4", total_bytes=total,
-                   used_bytes=used, free_bytes=free, traits=traits("ext4", "linux"))
-        )  # fmt: skip
-    link = Link(bus="usb")
-    drives = [
-        Drive(id="int", kind="nvme", external=False, link=link),
-        Drive(id="ext", kind="usb-ssd", external=True, link=link),
-    ]
-    probe = FakeProbe(reference_probe().facts, drives, volumes)
-    return ctx, lambda: scan(probe=probe, context=ctx, finders={"ollama": find_ollama})
+def system(drive: Path) -> Ollama:
+    """This machine's own Ollama, wherever its installer put its models."""
+    url = "http://127.0.0.1:11434"
+    wait(url)
+    ctx = Context(os_name=os_name(), home=str(Path.home()))
+    subprocess.run(["ollama", "pull", MODEL], check=True, timeout=900)  # noqa: S607
+    stores = find_ollama(ctx)
+    assert stores and stores[0].path, "the scan found no Ollama folder"
+    home = Path(os.path.abspath(os.sep))  # the system drive holds the service's folder
+    return Ollama(url, ctx, machine([home], drive, {"ollama": find_ollama}, ctx), drive, None)
 
 
-def listed() -> dict[str, str]:
-    return {m["name"]: m["digest"] for m in call("/api/tags", method="GET")["models"]}
+def key_of(ollama: Ollama) -> tuple[str, str]:
+    name = next(n for n in ollama.listed() if n.startswith(MODEL.split(":")[0]))
+    return name, f"ollama:{name}"
 
 
-def test_a_real_ollama_model_leaves_and_comes_back(ollama: Path) -> None:
-    ctx, run = machine(ollama)
-    before = listed()
-    name = next(n for n in before if n.startswith(MODEL.split(":")[0]))
-    key = f"ollama:{name}"
-    the_run = run()
-    the_plan = shelf.plan(the_run, [key], to=str(ROOT / "drive"), ctx=ctx, busy=set)
+def test_a_real_ollama_model_leaves_and_comes_back(ollama: Ollama) -> None:
+    before = ollama.listed()
+    name, key = key_of(ollama)
+    access = shelf.check(ollama.run(), "ollama")
+    if not access.ok:  # the service's own folder: what the reference machine needs
+        assert access.fix and not access.ok
+        run_fix(access.fix)
+        assert shelf.check(ollama.run(), "ollama").ok, "the fix shown did not give access"
+    the_run = ollama.run()
+    the_plan = shelf.plan(the_run, [key], to=str(ollama.drive), ctx=ollama.ctx, busy=Busy)
     assert the_plan.models[0].refused is None, the_plan
-    assert shelf.move(the_run, the_plan, ctx=ctx).done == [key]
-    assert name not in listed()  # Ollama itself no longer has it
-    assert not list((ollama / "blobs").iterdir())  # and its blobs are gone from the computer
-    assert shelf.restore(run(), [key]).done == [key]
-    assert listed().get(name) == before[name]  # listed again with the same digest
-    answer = call("/api/embed", {"model": name, "input": "hello", "keep_alive": 0})
+    assert shelf.move(the_run, the_plan, ctx=ollama.ctx).done == [key]
+    assert name not in ollama.listed()  # Ollama itself no longer has it
+    if ollama.models is not None:
+        assert not list((ollama.models / "blobs").iterdir())  # and its blobs left the computer
+    assert shelf.restore(ollama.run(), [key]).done == [key]
+    assert ollama.listed().get(name) == before[name]  # listed again with the same digest
+    answer = ollama.call("/api/embed", {"model": name, "input": "hello", "keep_alive": 0})
     assert answer["embeddings"] and len(answer["embeddings"][0]) > 10
+    assert shelf.remove(ollama.run(), [key]).done == [key]  # on the computer again: the drive may let go

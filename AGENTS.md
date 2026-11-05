@@ -25,7 +25,7 @@ uv sync --all-extras                 # install everything (dev included)
 scripts/check.sh                     # all quality gates: lint, format, types, tests + coverage, build, wheel smoke test
 uv run pytest                        # default suite (fast, offline, deterministic)
 scripts/gpu-lock.sh uv run pytest -m bench   # full-size benchmarks on real drives, under the lock (none written yet)
-scripts/gpu-lock.sh uv run pytest -m real    # the shelf with a private, real Ollama (pulls a small model)
+scripts/gpu-lock.sh uv run --group real pytest -m real   # the shelf with the real Ollama and Hugging Face
 ```
 
 ## Layout
@@ -49,8 +49,9 @@ src/hone_drive/
                                              (index.html, app.css, ui.js, app.js, screens.js, shelf.js; no build step)
   shelf.py               the model shelf's public API (design §17): shelf_move.py (plan, move),
                          shelf_restore.py (restore, remove, verify, contents), shelf_models.py (a model
-                         per tool, in use, leaving the computer), shelf_catalog.py (the catalog on the
-                         drive), shelf_copy.py (copy and prove), access.py (the check and its fix per OS)
+                         per tool, leaving the computer), shelf_busy.py (in use), shelf_catalog.py (the
+                         catalog on the drive), shelf_copy.py (copy and prove), access.py (the check, its
+                         fix per OS, and Windows' file-in-use test)
   runs.py                runs on disk;  text.py: sizes and speeds for people
   cli.py  cli_shelf.py   the command line;  `hone-drive shelf ...`
   testing.py             FakeProbe, recorded machines, record(), check_probe()
@@ -81,7 +82,8 @@ tests/unit|contract|integration|e2e   tests/fixtures/<os>/<machine>.json: record
 8. **Privacy:** reports remove serials, UUIDs, user and host names unless asked to keep them; nothing
    leaves the machine (design §13).
 9. **The default suite is offline, fast and deterministic** and asserts no speeds; full benchmarks
-   (`-m bench`) and the real-tool tests (`-m real`) run only through `scripts/gpu-lock.sh`. A test never
+   (`-m bench`) and the real-tool tests (`-m real`) run only through `scripts/gpu-lock.sh` (and the
+   "Real tools" workflow on CI runners). A test never
    talks to the user's own Ollama: shelf tests use `tests/shelf_machine.py`'s fakes.
 10. **Git**: Conventional Commits, small commits; AI-written commits end with a `Co-Authored-By:` line.
     Push a branch and open a pull request only when the user asks ("push", "ship it"). Inside that pull

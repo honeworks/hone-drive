@@ -11,8 +11,10 @@ import contextlib
 import getpass
 import os
 import shutil
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 Which = Callable[[str], str | None]
 PROBE = ".hone-drive-check-"
@@ -120,3 +122,24 @@ def _outermost_locked(path: str) -> str:
         if not os.access(folder, os.R_OK | os.X_OK) or (folder == path and not os.access(folder, os.W_OK)):
             return folder
     return path
+
+
+def held_elsewhere(path: str) -> bool:
+    """Windows: another program has `path` open (it can't be opened without sharing). Other systems don't
+    lock files this way; `shelf_busy.look()` finds their open files instead."""
+    if sys.platform != "win32":
+        return False
+    return _sharing_violation(path)  # pragma: no cover - runs on Windows CI only
+
+
+def _sharing_violation(path: str) -> bool:  # pragma: no cover - runs on Windows CI only
+    import ctypes  # noqa: PLC0415
+
+    generic_read, open_existing, sharing_violation = 0x80000000, 3, 32
+    kernel32: Any = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)  # noqa: B009 - Windows only
+    kernel32.CreateFileW.restype = ctypes.c_void_p
+    handle = kernel32.CreateFileW(ctypes.c_wchar_p(path), generic_read, 0, None, open_existing, 0, None)
+    if handle is None or handle == ctypes.c_void_p(-1).value:
+        return int(getattr(ctypes, "get_last_error")()) == sharing_violation  # noqa: B009
+    kernel32.CloseHandle(ctypes.c_void_p(handle))
+    return False

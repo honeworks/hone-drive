@@ -115,10 +115,13 @@ entry points, event buses and dependency-injection containers.
 
 ### Benchmark tests and `scripts/gpu-lock.sh`
 
-The shelf has real-tool tests (`-m real`, in `tests/real/`): they start a private `ollama serve` on its
-own port and folder, pull a small model from the network, move it to a folder and back, and load it. They
-skip unless run through `scripts/gpu-lock.sh`, never touch the user's own Ollama, and remove everything
-they made. Every other shelf test uses the fakes in `tests/shelf_machine.py`, so no test can ask a real
+The shelf has real-tool tests (`-m real`, in `tests/real/`, with `uv sync --group real`): they start a
+private `ollama serve` on its own port and folder (or, on CI's Linux runner, use the Ollama service its
+installer set up), download a small Ollama model and a tiny Hugging Face repo, move them to a drive and
+back, and load the model. Set `HONE_DRIVE_REAL_DRIVE` to a mounted exFAT image to test the drive people
+buy. They skip unless run through `scripts/gpu-lock.sh` (or with `HONE_DRIVE_REAL=1` on CI), never touch
+the user's own Ollama, and remove everything they made. The "Real tools" workflow runs them on Linux,
+macOS and Windows. Every other shelf test uses the fakes in `tests/shelf_machine.py`, so no test can ask a real
 Ollama to delete a model.
 
 The other heavy tests are full-size benchmarks

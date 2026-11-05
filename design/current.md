@@ -411,9 +411,16 @@ everything; they never leave the machine unless the user shares a report.
 - **Bench** (`-m bench`, not in the default suite): full-size benchmarks on real drives, run by hand
   through `scripts/gpu-lock.sh`, since a 4 GiB write would disturb another project's model run on the same
   machine (decision D-006). None are written yet: the marker is reserved for them.
-- **Real tools** (`-m real`, not in the default suite or CI, run by hand through `scripts/gpu-lock.sh`):
-  the shelf with a private `ollama serve` on its own port and folder: a small model is pulled, moved to a
-  folder, no longer listed by Ollama, brought back, listed with the same digest, and answers (§17).
+- **Real programs** (default suite): the shelf's in-use check against real processes on every system: a
+  program with a model file open, one with it mapped into memory and closed, and a ComfyUI `main.py`
+  started on a port of its own (§17).
+- **Real tools** (`-m real`, not in the default suite; by hand through `scripts/gpu-lock.sh`, and in the
+  "Real tools" workflow on Linux, macOS and Windows runners): the real Ollama and the real Hugging Face
+  cache (`huggingface_hub`, dependency group `real`) moved to an exFAT disk image and back. A small model
+  is pulled, moved, no longer listed by Ollama, brought back, listed with the same digest, and answers; a
+  tiny Hugging Face repo is moved and back and found offline with the same bytes. On the Linux runner
+  Ollama is installed by its own installer as a service of its own user with its folder closed, as on the
+  reference machine: the test sees the access check fail, runs the fix it shows, and moves the model.
 
 ## 15. Guarantees (acceptance cases)
 
@@ -480,10 +487,8 @@ everything; they never leave the machine unless the user shares a report.
   shows no health summary (decision D-017).
 - APFS snapshots, Btrfs/ZFS compression and deduplication can make "used" differ from the sum of files;
   0.1 names these as possible causes of unaccounted space without measuring them.
-- The shelf is checked with the real Ollama on Linux only; on macOS and Windows it runs in CI against
-  fake stores. ComfyUI counts as in use when its server answers on the default `127.0.0.1:8188`; another
-  port is not seen. Finding a file open in another program is best effort (psutil sees what the OS lets
-  it see).
+- The shelf's in-use check sees this user's programs only (an Ollama service of its own user answers
+  `/api/ps` instead); a program of another user with a model file open is not seen on Linux and macOS.
 
 ## 17. The model shelf
 
@@ -505,8 +510,10 @@ are still listed. The catalog carries `format: 1`.
 
 **Moving** (`plan()`, then `move()`):
 
-1. Refuse, changing nothing, when the model is in use (Ollama `/api/ps`; ComfyUI's server answering on
-   `127.0.0.1:8188`; a file open in one of this user's programs, best effort), when this user can't read,
+1. Refuse, changing nothing, when the model is in use (Ollama `/api/ps`; for ComfyUI, a process running
+   that install's `main.py` on any port, the ComfyUI desktop app, or a server answering on
+   `127.0.0.1:8188`; a file one of this user's programs has open or mapped into memory; on Windows, a
+   file another program holds, found by opening it without sharing), when this user can't read,
    write or remove its files (with the fix, below), when the drive lacks room for the files still to
    copy plus 10% plus 2 GiB, or when the drive is FAT32 and a file is over 4 GB.
 2. Compare first, trusting the catalog: a file whose size and modification time on both sides are still

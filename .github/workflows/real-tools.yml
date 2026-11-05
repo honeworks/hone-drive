@@ -1,0 +1,87 @@
+name: Real tools
+# The model shelf with the real tools (change 0003, design §14 "Real tools"): the real Ollama and the real
+# Hugging Face cache, moved to an exFAT disk image and back, on Linux, macOS and Windows runners. On Linux
+# Ollama is installed by its own installer as a service of its own user, like the reference machine: the
+# test checks that hone-drive can't read its folder, runs the fix hone-drive shows (CI has sudo without a
+# password; hone-drive itself never runs it), and moves a model.
+on:
+  push: { branches: [main] }
+  pull_request:
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency:
+  group: real-tools-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  HONE_DRIVE_REAL: "1"
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with: { python-version: "3.13", enable-cache: true }
+      - run: uv sync --all-extras --group real --frozen
+      - name: Ollama as a service of its own user (the official installer)
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          sudo chmod 700 /usr/share/ollama   # closed to everyone else, as on the reference machine
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:11434/api/version && break; sleep 1; done
+      - name: An exFAT drive
+        run: |
+          sudo apt-get install -y exfatprogs
+          truncate -s 4G "$RUNNER_TEMP/shelf.img" && mkfs.exfat -L SHELF "$RUNNER_TEMP/shelf.img"
+          sudo mkdir -p /mnt/shelf
+          sudo mount -o loop,uid=$(id -u),gid=$(id -g) "$RUNNER_TEMP/shelf.img" /mnt/shelf
+      - name: The service's Ollama (the fix, then the move) and the Hugging Face cache
+        run: uv run pytest -m real -v
+        env: { HONE_DRIVE_REAL_OLLAMA: system, HONE_DRIVE_REAL_RUN_FIX: "1", HONE_DRIVE_REAL_DRIVE: /mnt/shelf }
+      - name: A private Ollama of this user
+        run: uv run pytest -m real -v -k ollama
+        env: { HONE_DRIVE_REAL_OLLAMA: private, HONE_DRIVE_REAL_DRIVE: /mnt/shelf }
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with: { python-version: "3.13", enable-cache: true }
+      - run: uv sync --all-extras --group real --frozen
+      - run: brew install ollama
+      - name: An exFAT drive
+        run: |
+          hdiutil create -size 4g -fs ExFAT -volname SHELF "$RUNNER_TEMP/shelf"
+          hdiutil attach "$RUNNER_TEMP/shelf.dmg"
+      - run: uv run pytest -m real -v
+        env: { HONE_DRIVE_REAL_OLLAMA: private, HONE_DRIVE_REAL_DRIVE: /Volumes/SHELF }
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with: { python-version: "3.13", enable-cache: true }
+      - run: uv sync --all-extras --group real --frozen
+      - name: Ollama
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "ollama"
+          Invoke-WebRequest https://github.com/ollama/ollama/releases/latest/download/ollama-windows-amd64.zip -OutFile "$dir.zip"
+          Expand-Archive "$dir.zip" -DestinationPath $dir
+          Add-Content $env:GITHUB_PATH $dir
+      - name: An exFAT drive (a virtual disk)
+        shell: pwsh
+        run: |
+          $vhd = Join-Path $env:RUNNER_TEMP "shelf.vhdx"
+          $script = Join-Path $env:RUNNER_TEMP "diskpart.txt"
+          @(
+            "create vdisk file=`"$vhd`" maximum=4096 type=expandable",
+            "select vdisk file=`"$vhd`"", "attach vdisk", "create partition primary",
+            "format fs=exfat quick label=SHELF", "assign letter=S"
+          ) | Set-Content $script
+          diskpart /s $script
+      - run: uv run pytest -m real -v
+        env: { HONE_DRIVE_REAL_OLLAMA: private, HONE_DRIVE_REAL_DRIVE: "S:\\" }

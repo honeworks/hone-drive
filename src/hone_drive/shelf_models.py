@@ -17,7 +17,6 @@ from hone_drive.stores import Context
 
 FILE_TOOLS = ("comfyui", "lmstudio", "llamacpp", "custom")
 TOOLS = ("ollama", "huggingface", *FILE_TOOLS)
-COMFYUI = "http://127.0.0.1:8188"
 
 
 @dataclass
@@ -31,6 +30,7 @@ class LocalModel:
     bytes: int = 0
     replaceable: bool = False
     readable: bool = True  # False: sized by the Ollama server, its folder not readable
+    install: str | None = None  # ComfyUI: the install folder (with main.py), to see whether it runs
 
     def path(self, rel: str) -> str:
         return os.path.join(self.root, *rel.split("/"))
@@ -67,7 +67,10 @@ def _describe(store: Store, item: Item) -> LocalModel | None:
         return _huggingface(store, item)
     if item.path and os.path.isfile(item.path):
         root, name = os.path.split(item.path)
-        return LocalModel(key_of(store, item), store.id, item.names, root, [name], bytes=item.bytes or 0)
+        model = LocalModel(key_of(store, item), store.id, item.names, root, [name], bytes=item.bytes or 0)
+        if store.id == "comfyui" and store.path:
+            model.install = os.path.dirname(store.path)  # the store's path is <install>/models
+        return model
     return None
 
 
@@ -114,47 +117,6 @@ def _huggingface(store: Store, item: Item) -> LocalModel | None:
     model.files.sort()
     model.links.sort()
     return model
-
-
-# -- in use (owner's answer 3: refuse) ----------------------------------------------------------------------
-
-
-def in_use(model: LocalModel, ctx: Context, open_files: set[str]) -> str | None:
-    """Why `model` can't be moved now, or None."""
-    if model.tool == "ollama":
-        loaded = _ollama_loaded(ctx)
-        if set(model.names) & loaded:
-            name = model.names[0]
-            return f"Ollama has {name} loaded; unload it (ollama stop {name}) and try again"
-    if model.tool == "comfyui" and ctx.fetch(f"{COMFYUI}/system_stats") is not None:
-        return "ComfyUI is running; close it and try again"
-    busy = [rel for rel in model.files if os.path.realpath(model.path(rel)) in open_files]
-    if busy:
-        return f"a program has {busy[0]} open; close it and try again"
-    return None
-
-
-def _ollama_loaded(ctx: Context) -> set[str]:
-    raw = ctx.fetch(f"{server(ctx.env)}/api/ps")
-    try:
-        models = cast(list[dict[str, Any]], json.loads(raw or b"{}").get("models") or [])
-    except (ValueError, AttributeError):
-        return set()
-    return {str(m.get("name", "")) for m in models} | {str(m.get("model", "")) for m in models}
-
-
-def open_files() -> set[str]:
-    """Files this user's programs have open (best effort: psutil sees only what the OS lets it see)."""
-    import psutil  # noqa: PLC0415
-
-    found: set[str] = set()
-    me = psutil.Process().username()
-    for proc in psutil.process_iter(["username"]):
-        if proc.info.get("username") != me:
-            continue
-        with contextlib.suppress(psutil.Error, OSError):
-            found |= {os.path.realpath(f.path) for f in proc.open_files()}
-    return found
 
 
 # -- leaving the computer -----------------------------------------------------------------------------------

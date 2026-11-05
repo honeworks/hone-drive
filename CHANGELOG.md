@@ -14,7 +14,10 @@ design changed is in [`design/changes/`](design/changes/).
   models in use, a drive without room or a FAT32 drive are refused; bringing back never touches the
   drive; removing the only copy from a drive needs a yes; `shelf check` shows the command that gives
   this user access to a tool's folder on this system (Ollama's service folder on Linux). Works with
-  Ollama, ComfyUI, Hugging Face, LM Studio, llama.cpp and your own folders. Guarantees AC17 to AC26.
+  Ollama, ComfyUI, Hugging Face, LM Studio, llama.cpp and your own folders. A model counts as in use when
+  a program has it open or mapped into memory, when ComfyUI runs from its install on any port, or (on
+  Windows) when another program holds the file. Guarantees AC17 to AC26, tested with the real Ollama and
+  Hugging Face on Linux, macOS and Windows (the "Real tools" workflow).
 
 ### Changed
 

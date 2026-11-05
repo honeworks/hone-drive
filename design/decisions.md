@@ -223,3 +223,17 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
 - **Why:** one module per job keeps each readable; no change to the stored run means nothing to migrate.
 - **Status:** follows change 0003.
 
+## D-023: what "in use" covers, and where the real tools are tested  (2026-11-05)
+
+- **Question:** the first build saw ComfyUI only on its default port, open files only as psutil lists
+  them, and the real Ollama only on Linux; the owner asked for all three to be covered ("I need them").
+- **Choice:** one pass over this user's programs finds their open and memory-mapped files and the
+  processes running a ComfyUI install's `main.py` (any port) or the desktop app; on Windows a file is also
+  in use when it can't be opened without sharing. The real tools run in a CI workflow on Linux, macOS and
+  Windows runners against an exFAT disk image, with the real Ollama (on Linux, installed as a service of
+  its own user with its folder closed, and the fix hone-drive shows run by the test) and the real Hugging
+  Face cache. `huggingface_hub` is a test-only dependency group (`real`), never installed for users.
+- **Why:** these are the cases the guarantees (AC20, AC22, AC23) promise; tested in the default suite with
+  real processes, and with the real tools wherever a runner has them.
+- **Status:** follows change 0003, at the owner's request.
+

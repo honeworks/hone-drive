@@ -16,6 +16,7 @@ from hone_drive import shelf, stores
 from hone_drive.filesystems import traits
 from hone_drive.model import Drive, Run, Volume
 from hone_drive.scanner import scan
+from hone_drive.shelf_busy import Busy
 from hone_drive.stores import Context
 from hone_drive.testing import FakeProbe, reference_probe
 from tests.conftest import FakeRunner
@@ -117,7 +118,7 @@ def attach(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Machine:
     )  # fmt: skip
     monkeypatch.setattr(shelf, "context", lambda _run: ctx)
     monkeypatch.setattr("hone_drive.shelf_move.context", lambda _run: ctx)
-    monkeypatch.setattr("hone_drive.shelf_move.open_files", set[str])
+    monkeypatch.setattr("hone_drive.shelf_move.look", Busy)
     return Machine(home, drive, fake, ctx)
 
 

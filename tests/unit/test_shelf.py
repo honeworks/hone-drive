@@ -13,6 +13,7 @@ import pytest
 from hone_drive import shelf, shelf_move, shelf_restore
 from hone_drive import shelf_catalog as catalog
 from hone_drive.errors import NotFound, ShelfBusy, ShelfDamaged, UnsupportedFormat
+from hone_drive.shelf_busy import Busy
 from hone_drive.shelf_copy import copy_checked
 from tests.shelf_machine import Machine, build
 
@@ -136,7 +137,7 @@ def test_refusals(machine: Machine, monkeypatch: pytest.MonkeyPatch) -> None:
     assert planned["ollama:none"].refused == "not on this computer"
     machine.ollama.loaded, machine.ollama.comfyui_running = [], False
     local = str(machine.home / "ComfyUI" / "models" / "diffusion_models" / "wan.safetensors")
-    opened = shelf.plan(run, [WAN], to=str(machine.drive), busy=lambda: {os.path.realpath(local)})
+    opened = shelf.plan(run, [WAN], to=str(machine.drive), busy=lambda: Busy(files={os.path.realpath(local)}))
     assert "open" in (opened.models[0].refused or "")
     monkeypatch.setattr(shelf_move, "MARGIN", 10**15)
     assert "not enough room" in (shelf.plan(run, [WAN], to=str(machine.drive)).models[0].refused or "")

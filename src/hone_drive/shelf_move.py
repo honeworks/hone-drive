@@ -17,9 +17,10 @@ from hone_drive import shelf_catalog as catalog
 from hone_drive.errors import NotFound, ShelfDamaged, ShelfRefused, Stopped
 from hone_drive.model import Run, Volume
 from hone_drive.presentation import volume_names
+from hone_drive.shelf_busy import Busy, in_use, look
 from hone_drive.shelf_catalog import Shelf, ShelfFile, ShelfLink, ShelfModel
 from hone_drive.shelf_copy import copy_checked, mtime_ns, read_back_cache, sha256_of, unchanged
-from hone_drive.shelf_models import LocalModel, in_use, local_models, open_files, remove_local
+from hone_drive.shelf_models import LocalModel, local_models, remove_local
 from hone_drive.stores import Context
 
 GIB = 1024**3
@@ -100,14 +101,14 @@ def plan(
     keys: list[str],
     to: str | None = None,
     ctx: Context | None = None,
-    busy: Callable[[], set[str]] | None = None,
+    busy: Callable[[], Busy] | None = None,
 ) -> Plan:
     """What `move()` would do with `keys` (see `shelf_models.key_of`); nothing changes."""
     ctx = ctx or context(run)
     volume = target(run, to)
     shelf = catalog.load(volume.mount)
     local = local_models(run)
-    opened = (busy or open_files)()
+    opened = (busy or look)()
     free = shutil.disk_usage(volume.mount).free
     drive_access = access.check([str(catalog.folder(volume.mount))], [], run.machine.os)
     result = Plan("move", volume.mount, volume_names(run)[volume.mount], [])
@@ -130,7 +131,7 @@ def plan(
 
 
 def _refusal(
-    model: LocalModel, volume: Volume, ctx: Context, opened: set[str], drive: access.Access
+    model: LocalModel, volume: Volume, ctx: Context, opened: Busy, drive: access.Access
 ) -> tuple[str | None, list[str]]:
     if not drive.ok:
         return f"hone-drive can't write on this drive: {drive.problems[0]}", drive.fix
