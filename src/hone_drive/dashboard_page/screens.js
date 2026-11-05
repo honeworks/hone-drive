@@ -288,7 +288,8 @@ function models(state) {
     const rows = m.rows.filter((r) => (!only || r.store === only) && (!filter || r.names.join(" ").toLowerCase().includes(filter)));
     body.replaceChildren(...rows.slice(0, 400).map((r) => el("tr", {},
       el("td", {}, el("div", { text: r.names[0] }), r.names.length > 1 ? el("div", { class: "small muted", text: `also ${r.names.slice(1).join(", ")}` }) : null,
-        r.duplicate ? el("span", { class: "chip warn", text: "stored twice" }) : null),
+        r.duplicate ? el("span", { class: "chip warn", text: "stored twice" }) : null,
+        r.warm ? el("div", { class: "small muted", text: "fits in free memory: a second load may come from RAM, faster than shown" }) : null),
       el("td", { class: "soft nowrap", text: r.store }), el("td", { class: "num", text: size(r.bytes) }), el("td", { class: "soft nowrap", text: r.where }),
       ...m.columns.map((c) => {
         const s = r.loads[c.mount];

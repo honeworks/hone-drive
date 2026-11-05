@@ -9,7 +9,7 @@ from typing import Any
 from hone_drive import presentation as p
 from hone_drive.advice import advise
 from hone_drive.compare import compare
-from hone_drive.estimates import load_time
+from hone_drive.estimates import load_time, warm
 from hone_drive.filesystems import display_name
 from hone_drive.model import Drive, Run, Volume
 
@@ -18,7 +18,8 @@ MIN_SEGMENT = 1e9  # stores under 1 GB (or 0.2% of the volume) are counted in "e
 BIGGEST = 12
 
 
-def run_view(run: Run, home: str) -> dict[str, Any]:
+def run_view(run: Run, home: str, free_ram: int | None = None) -> dict[str, Any]:
+    """`free_ram`: memory free now, so a model that fits is marked as possibly loading warm (design §7)."""
     advice = run.advice or advise(run, home)
     the_plan = p.plan(run, advice)
     names = p.volume_names(run)
@@ -35,7 +36,7 @@ def run_view(run: Run, home: str) -> dict[str, Any]:
         "volumes": [_volume(run, v, names) for v in run.volumes if v.total_bytes >= p.SMALL_VOLUME],
         "biggest": _biggest(run, names),
         "plan": the_plan,
-        "models": _models(run, names),
+        "models": _models(run, names, free_ram),
         "measurements": [m.model_dump(mode="json") for m in run.measurements],
         "accounted": bool(run.accounting),
     }
@@ -139,7 +140,7 @@ def _biggest(run: Run, names: dict[str, str]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda r: -r["bytes"])[:BIGGEST]
 
 
-def _models(run: Run, names: dict[str, str]) -> dict[str, Any]:
+def _models(run: Run, names: dict[str, str], free_ram: int | None) -> dict[str, Any]:
     targets = [
         v
         for v in run.volumes
@@ -174,6 +175,7 @@ def _models(run: Run, names: dict[str, str]) -> dict[str, Any]:
                     "where": names.get(item.volume or "", "?"),
                     "loads": loads,
                     "duplicate": item.path in duplicated,
+                    "warm": warm(item, run, free_ram),
                     "details": item.details,
                 }
             )

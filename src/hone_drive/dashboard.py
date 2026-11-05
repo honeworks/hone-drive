@@ -121,7 +121,10 @@ class Handler(BaseHTTPRequestHandler):
         if method == "GET" and path == "/runs":
             return HTTPStatus.OK, {"runs": list_runs(), "job": jobs.state}
         if method == "GET" and path.startswith("/runs/"):
-            return HTTPStatus.OK, run_view(load_run(path.removeprefix("/runs/")), home)
+            import psutil  # noqa: PLC0415 - imported where it is used, as in volumes.py
+
+            free_ram = int(psutil.virtual_memory().available)
+            return HTTPStatus.OK, run_view(load_run(path.removeprefix("/runs/")), home, free_ram)
         if method == "GET" and path == "/compare":
             return HTTPStatus.OK, compare_view(load_run(query["a"]), load_run(query.get("b", "latest")))
         if method == "GET" and path.startswith("/report/"):
