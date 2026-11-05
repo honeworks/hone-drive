@@ -18,12 +18,12 @@ import socket
 import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any
+from typing import Any, cast
 
 from hone_drive import shelf_catalog as catalog
 from hone_drive.errors import ShelfDamaged
 from hone_drive.shelf_catalog import ShelfModel
-from hone_drive.store_ollama import server
+from hone_drive.store_ollama import read_manifests, server
 from hone_drive.stores import Context
 
 MANIFEST_TYPE = "application/vnd.docker.distribution.manifest.v2+json"
@@ -35,13 +35,40 @@ def answers(ctx: Context) -> bool:
     return ctx.fetch(f"{server(ctx.env)}/api/version") is not None
 
 
-def run_import(entry: ShelfModel, mount: str, ctx: Context) -> None:
-    """Serve the drive's copy and have Ollama pull it, copy it to each original name, and drop the
-    temporary name; raises when Ollama refuses a step."""
-    registry = _Registry(entry, mount)
-    host = f"127.0.0.1:{registry.port}"
-    first = next(f.rel for f in entry.files if f.rel.startswith("manifests/")).split("/")
-    temp = f"{host}/{first[2]}/{first[3]}:{first[4]}"  # manifests/<host>/<namespace>/<model>/<tag>
+def drive_manifest(entry: ShelfModel, mount: str) -> bytes:
+    """The model's manifest as the drive holds it: the registry's own bytes where Ollama kept them (the blob
+    a manifests-v2 link points to), else the manifests/ file."""
+    blobs = [target.rsplit("/", 1)[-1] for rel, target in ((x.rel, x.target) for x in entry.links)
+             if rel.startswith("manifests-v2/")]  # fmt: skip
+    rel = f"blobs/{blobs[0]}" if blobs else next(f.rel for f in entry.files if f.rel.startswith("manifests/"))
+    with open(catalog.drive_file(mount, entry, rel), "rb") as handle:
+        return handle.read()
+
+
+def ollama_here(entry: ShelfModel, mount: str) -> bool:
+    """Ollama has every name of the model on the computer, each listing the drive copy's config and
+    layers, and every one of those blobs is there."""
+    try:
+        data = cast(dict[str, Any], json.loads(drive_manifest(entry, mount)))
+    except (OSError, ValueError, StopIteration):
+        return False
+    config = cast(dict[str, Any], data.get("config") or {})
+    layers = [config, *cast(list[dict[str, Any]], data.get("layers") or [])]
+    digests = tuple(str(layer["digest"]) for layer in layers if layer.get("digest"))
+    names = {m.name for m in read_manifests(entry.root) if m.digests == digests}
+    blobs = [os.path.join(entry.root, "blobs", d.replace(":", "-", 1)) for d in digests]
+    return set(entry.names) <= names and all(os.path.isfile(b) for b in blobs)
+
+
+def bring_back(entry: ShelfModel, mount: str, ctx: Context) -> None:
+    """Have Ollama pull the drive's copy, copy it to each original name and drop the temporary name;
+    raises when Ollama refuses a step or the model isn't there afterwards."""
+    if ollama_here(entry, mount):
+        return
+    registry = _Registry(drive_manifest(entry, mount), entry, mount)
+    first = ([x.rel for x in entry.links] + [f.rel for f in entry.files if f.rel.startswith("manifests")])[0]
+    _, _, namespace, model, tag = first.split("/")[-5:]
+    temp = f"127.0.0.1:{registry.port}/{namespace}/{model}:{tag}"
     steps: list[tuple[str, str, dict[str, object]]] = [
         ("POST", "/api/pull", {"model": temp, "insecure": True, "stream": False}),
         *[("POST", "/api/copy", {"source": temp, "destination": name}) for name in entry.names],
@@ -54,16 +81,18 @@ def run_import(entry: ShelfModel, mount: str, ctx: Context) -> None:
                 raise ShelfDamaged(f"Ollama could not take back {entry.names[0]} ({path}): {answer!r}")
     finally:
         registry.close()
+    if not ollama_here(entry, mount):
+        raise ShelfDamaged(
+            f"Ollama does not list {entry.names[0]} with the drive's layers after taking it back"
+        )
 
 
 class _Registry:
     """The smallest registry Ollama pulls from: the manifest by tag, blobs by digest, with ranges."""
 
-    def __init__(self, entry: ShelfModel, mount: str) -> None:
+    def __init__(self, manifest: bytes, entry: ShelfModel, mount: str) -> None:
         files = {f.rel: catalog.drive_file(mount, entry, f.rel) for f in entry.files}
-        manifest = next(p for rel, p in files.items() if rel.startswith("manifests/"))
-        with open(manifest, "rb") as handle:
-            self.manifest = handle.read()
+        self.manifest = manifest
         blobs = {
             rel.split("/", 1)[1].replace("-", ":", 1): p
             for rel, p in files.items()

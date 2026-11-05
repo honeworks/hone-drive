@@ -5,15 +5,12 @@ LM Studio, llama.cpp and the user's own folders: one file."""
 from __future__ import annotations
 
 import contextlib
-import hashlib
-import json
 import os
 from dataclasses import dataclass, field
-from typing import Any, cast
 
 from hone_drive.errors import ShelfRefused
 from hone_drive.model import Item, Run, Store
-from hone_drive.store_ollama import server
+from hone_drive.store_ollama import read_manifests, server
 from hone_drive.stores import Context
 
 FILE_TOOLS = ("comfyui", "lmstudio", "llamacpp", "custom")
@@ -80,26 +77,25 @@ def _ollama(store: Store, item: Item) -> LocalModel:
     if store.source != "files" or not store.path:
         model.readable = False  # sized by the server: its folder can't be read (decision D-010)
         return model
-    model.files = manifests_of(store.path, item.id)
-    model.files += sorted(blob_rel(d) for d in item.details.get("digests", "").split(",") if d)
+    files: set[str] = set()
+    for manifest in read_manifests(store.path):
+        if manifest.model != item.id:
+            continue
+        if manifest.link is not None and manifest.blob is not None:  # manifests-v2 (D-025)
+            model.links.append((manifest.rel, manifest.link))
+            files.add(manifest.blob)
+        else:
+            files.add(manifest.rel)
+        files |= {blob_rel(d) for d in manifest.digests}
+    # blobs first, the manifests that name them last (the order a restore writes them in)
+    model.files = sorted(files, key=lambda rel: (rel.startswith("manifests"), rel))
+    model.links.sort()
     model.replaceable = all(n.count("/") == 0 for n in item.names)  # Ollama's own library
     return model
 
 
 def blob_rel(digest: str) -> str:
     return "blobs/" + digest.replace(":", "-", 1)
-
-
-def manifests_of(models: str, item_id: str) -> list[str]:
-    """Every manifest with this content (one per name the model has; the item id is its hash)."""
-    found: list[str] = []
-    for folder, _, names in os.walk(os.path.join(models, "manifests")):
-        for name in names:
-            path = os.path.join(folder, name)
-            with contextlib.suppress(OSError), open(path, "rb") as handle:
-                if hashlib.sha256(handle.read()).hexdigest()[:12] == item_id:
-                    found.append(os.path.relpath(path, models).replace(os.sep, "/"))
-    return sorted(found)
 
 
 def _huggingface(store: Store, item: Item) -> LocalModel | None:
@@ -147,8 +143,8 @@ def _remove_ollama(model: LocalModel, ctx: Context) -> None:
     gone: tuple[type[OSError], ...] = (FileNotFoundError,)
     if all(a is not None for a in answered):
         gone = (FileNotFoundError, PermissionError)  # Ollama removed them; its folder may be read-only to us
-    manifests = [rel for rel in model.files if rel.startswith("manifests/")]
-    for rel in manifests:  # the server may not be running: then hone-drive removes them itself
+    names = [rel for rel in model.files if rel.startswith("manifests")] + [rel for rel, _ in model.links]
+    for rel in names:  # the server may not be running: then hone-drive removes them itself
         with contextlib.suppress(*gone):
             os.remove(model.path(rel))
     still = listed_blobs(model.root)
@@ -156,22 +152,21 @@ def _remove_ollama(model: LocalModel, ctx: Context) -> None:
         if rel.startswith("blobs/") and rel not in still:
             with contextlib.suppress(*gone):
                 os.remove(model.path(rel))
-    for rel in manifests:
-        _prune_empty(os.path.dirname(model.path(rel)), stop=os.path.join(model.root, "manifests"))
-    if any(os.path.exists(model.path(rel)) for rel in manifests):
+    for rel in names:
+        top = rel.split("/", 1)[0]
+        _prune_empty(os.path.dirname(model.path(rel)), stop=os.path.join(model.root, top))
+    if any(os.path.lexists(model.path(rel)) for rel in names):
         raise ShelfRefused(f"Ollama did not remove {model.names[0]}; it is on the drive and still here")
 
 
 def listed_blobs(models: str) -> set[str]:
-    """The blobs the manifests left on the computer list (design AC21: those stay)."""
+    """The blobs the manifests left on the computer list, and the blobs manifests-v2 links point to
+    (guarantee 21: those stay)."""
     found: set[str] = set()
-    for folder, _, names in os.walk(os.path.join(models, "manifests")):
-        for name in names:
-            with contextlib.suppress(OSError, ValueError):
-                with open(os.path.join(folder, name), encoding="utf-8") as handle:
-                    data = cast(dict[str, Any], json.load(handle))
-                layers = [data.get("config") or {}, *cast(list[dict[str, Any]], data.get("layers") or [])]
-                found |= {blob_rel(str(layer["digest"])) for layer in layers if layer.get("digest")}
+    for manifest in read_manifests(models):
+        found |= {blob_rel(d) for d in manifest.digests}
+        if manifest.blob:
+            found.add(manifest.blob)
     return found
 
 

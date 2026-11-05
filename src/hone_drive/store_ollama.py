@@ -8,7 +8,7 @@ import hashlib
 import json
 import os
 import re
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any, cast
 
 from hone_drive.model import Item, Store
@@ -27,7 +27,7 @@ def find_ollama(ctx: Context) -> list[Store]:
     stores: list[Store] = []
     hidden: list[str] = []
     for path in _locations(ctx):
-        if os.path.isdir(os.path.join(path, "manifests")):
+        if any(os.path.isdir(os.path.join(path, top)) for top in FOLDERS):
             stores.append(_from_files(path, ctx))
         elif blocked(path):
             hidden.append(path)
@@ -62,43 +62,94 @@ def _locations(ctx: Context) -> list[str]:
     return list(dict.fromkeys(paths + candidates_for(ctx, DEFAULTS[ctx.os_name])))
 
 
-def _name(models: str, manifest: str) -> str:
-    rel = os.path.relpath(manifest, os.path.join(models, "manifests")).replace(os.sep, "/")
-    host_and_path, _, tag = rel.rpartition("/")
-    if host_and_path.startswith("registry.ollama.ai/library/"):
-        return f"{host_and_path.removeprefix('registry.ollama.ai/library/')}:{tag}"
-    return f"{host_and_path.removeprefix('registry.ollama.ai/')}:{tag}"
+FOLDERS = ("manifests", "manifests-v2")  # since 0.40 Ollama also keeps manifests-v2 (decision D-025)
+LIBRARY_HOSTS = ("registry.ollama.ai", "ollama.com")
+
+
+@dataclass(frozen=True)
+class Manifest:
+    """One name's manifest. In `manifests/` it is a file; in `manifests-v2/` (Ollama 0.40 and later) a
+    link to a blob holding the manifest as the registry sent it (a copy where links can't be made)."""
+
+    rel: str  # "/"-separated, under the models folder
+    name: str  # "gemma4:31b", "user/model:tag", "hf.co/user/model:Q4"
+    digests: tuple[str, ...]  # the config and the layers, "sha256:<hex>", in order
+    sizes: tuple[int, ...]
+    blob: str | None = None  # manifests-v2: the blob it links to, "blobs/sha256-<hex>"
+    link: str | None = None  # manifests-v2: the link's target, as the OS gave it
+
+    @property
+    def model(self) -> str:
+        """The same id for every name of one model, in either folder: its config and layers."""
+        return hashlib.sha256("\n".join(self.digests).encode()).hexdigest()[:12]
+
+
+def read_manifests(models: str) -> list[Manifest]:
+    """Every manifest in `models`, in both folders; unreadable or broken ones are left out."""
+    found: list[Manifest] = []
+    for top in FOLDERS:
+        for folder, _, names in os.walk(os.path.join(models, top)):
+            for file_name in names:
+                path = os.path.join(folder, file_name)
+                manifest = _read(models, path)
+                if manifest is not None:
+                    found.append(manifest)
+    return found
+
+
+def _read(models: str, path: str) -> Manifest | None:
+    try:
+        with open(path, "rb") as handle:  # follows a manifests-v2 link to its blob
+            data = cast(dict[str, Any], json.loads(handle.read()))
+    except (OSError, ValueError):
+        return None
+    config = cast(dict[str, Any], data.get("config") or {})
+    layers = [config, *cast(list[dict[str, Any]], data.get("layers") or [])]
+    rel = os.path.relpath(path, models).replace(os.sep, "/")
+    link = os.readlink(path) if os.path.islink(path) else None
+    blob = None
+    if link is not None:
+        blob = "blobs/" + os.path.basename(link.replace("\\", "/"))
+    return Manifest(
+        rel=rel,
+        name=name_of(rel),
+        digests=tuple(str(layer.get("digest", "")) for layer in layers if layer.get("digest")),
+        sizes=tuple(int(layer.get("size", 0)) for layer in layers if layer.get("digest")),
+        blob=blob,
+        link=link.replace(os.sep, "/") if link is not None else None,
+    )
+
+
+def name_of(rel: str) -> str:
+    """The name Ollama shows for a manifest's path: `manifests/registry.ollama.ai/library/gemma/31b` and
+    `manifests-v2/ollama.com/library/gemma/31b` are `gemma:31b`."""
+    _, host, *repo, tag = rel.split("/")
+    if host in LIBRARY_HOSTS:
+        return f"{'/'.join(repo).removeprefix('library/')}:{tag}"
+    return f"{host}/{'/'.join(repo)}:{tag}"
 
 
 def _from_files(models: str, ctx: Context) -> Store:
     by_id: dict[str, Item] = {}
     referenced: set[str] = set()
-    manifests_dir = os.path.join(models, "manifests")
-    for folder, _, names in os.walk(manifests_dir):
-        for name in names:
-            path = os.path.join(folder, name)
-            try:
-                raw = Path(path).read_bytes()
-                data = cast(dict[str, Any], json.loads(raw))
-            except (OSError, ValueError):
-                continue
-            config = cast(dict[str, Any], data.get("config") or {})
-            layers = [config, *cast(list[dict[str, Any]], data.get("layers") or [])]
-            digests = {str(layer.get("digest", "")) for layer in layers if layer.get("digest")}
-            referenced |= digests
-            model_id = hashlib.sha256(raw).hexdigest()[:12]
-            item = by_id.setdefault(
-                model_id,
-                Item(
-                    id=model_id,
-                    names=[],
-                    bytes=sum(int(layer.get("size", 0)) for layer in layers),
-                    files=len(digests),
-                    path=path,
-                    details={"digests": ",".join(sorted(digests))},
-                ),
-            )
-            item.names.append(_name(models, path))
+    for manifest in read_manifests(models):
+        referenced |= set(manifest.digests)
+        if manifest.blob:
+            referenced.add(manifest.blob.removeprefix("blobs/").replace("-", ":", 1))
+        unique = dict(zip(manifest.digests, manifest.sizes, strict=True))
+        item = by_id.setdefault(
+            manifest.model,
+            Item(
+                id=manifest.model,
+                names=[],
+                bytes=sum(unique.values()),
+                files=len(unique),
+                path=os.path.join(models, *manifest.rel.split("/")),
+                details={"digests": ",".join(sorted(unique))},
+            ),
+        )
+        if manifest.name not in item.names:
+            item.names.append(manifest.name)
     tally = walk(models, deadline=ctx.deadline(), one_device=False)
     items = sorted(by_id.values(), key=lambda i: -(i.bytes or 0))
     orphans = _orphans(models, referenced)

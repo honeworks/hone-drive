@@ -37,8 +37,13 @@ def test_what_a_model_is_per_tool(machine: Machine) -> None:
     found = shelf.local_models(machine.run())
     assert set(found) == {GEMMA, TINY, HF, WAN}
     gemma = found[GEMMA]
-    assert gemma.files[0] == "manifests/registry.ollama.ai/library/gemma/31b"
+    assert gemma.files[-1] == "manifests/registry.ollama.ai/library/gemma/31b"  # written last on the way back
     assert len([f for f in gemma.files if f.startswith("blobs/")]) == 2 and gemma.replaceable
+    tiny = found[TINY]  # Ollama 0.40: the manifests/ file, and a manifests-v2 link to the registry's bytes
+    assert tiny.files[-1] == "manifests/registry.ollama.ai/library/tiny/latest"
+    assert len([f for f in tiny.files if f.startswith("blobs/")]) == 3  # config, layer, the v2 manifest
+    if tiny.links:
+        assert tiny.links[0][0] == "manifests-v2/ollama.com/library/tiny/latest"
     hf = found[HF]
     assert "models--org--name/blobs/abc" in hf.files and hf.replaceable
     if hf.links:
@@ -66,7 +71,7 @@ def test_a_blob_another_model_lists_stays_on_the_computer(machine: Machine) -> N
     shared_blob = machine.models / "blobs" / shared["config"]["digest"].replace(":", "-")
     move(machine, GEMMA)
     assert shared_blob.exists()  # tiny:latest still lists it (AC21)
-    assert len(list((machine.models / "blobs").iterdir())) == 2
+    assert len(list((machine.models / "blobs").iterdir())) == 3  # tiny's config, layer and v2 manifest
 
 
 def test_moving_again_copies_nothing(machine: Machine, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -316,3 +321,15 @@ def test_bringing_back_through_ollama_needs_it_running(
     monkeypatch.setattr(shelf_restore, "VIA_SERVER", "always")
     planned = shelf.plan_restore(machine.run(), [GEMMA])[0].models[0]
     assert planned.refused and "start Ollama" in planned.refused
+
+
+def test_ollama_040_models_leave_and_come_back_whole(machine: Machine) -> None:
+    """Decision D-025: both of Ollama's folders, and the blob a manifests-v2 link points to."""
+    v2 = machine.models / "manifests-v2" / "ollama.com" / "library" / "tiny" / "latest"
+    before = v2.read_bytes()
+    assert move(machine, TINY).done == [TINY]
+    assert not os.path.lexists(v2) and machine.ollama.deleted == ["tiny:latest"]
+    assert shelf.restore(machine.run(), [TINY]).done == [TINY]
+    assert v2.read_bytes() == before and os.path.islink(v2) == (sys.platform != "win32" or os.path.islink(v2))
+    assert TINY in shelf.local_models(machine.run())
+    assert shelf.remove(machine.run(), [TINY]).done == [TINY]  # on the computer: the drive may let go

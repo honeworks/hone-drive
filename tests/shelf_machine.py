@@ -131,6 +131,22 @@ def manifest(models: Path, name: str, tag: str, digests: list[str]) -> None:
     path.write_text(json.dumps(data))
 
 
+def manifest_v2(models: Path, name: str, tag: str, digests: list[str]) -> None:
+    """Ollama 0.40's way (decision D-025): the registry's bytes in a blob, and a link to it by name."""
+    data = {
+        "schemaVersion": 2,
+        "config": {"digest": digests[0], "size": 1},
+        "layers": [{"digest": d, "size": 1} for d in digests[1:]],
+    }
+    held = blob(models, json.dumps(data, indent=1).encode()).replace(":", "-")
+    path = models / "manifests-v2" / "ollama.com" / "library" / name / tag
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.symlink(f"../../../../blobs/{held}", path)
+    except OSError:  # Windows without the right to make links
+        path.write_bytes((models / "blobs" / held).read_bytes())
+
+
 def build(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Machine:
     """gemma:31b and tiny:latest share a config blob; one Hugging Face repo; one ComfyUI model file."""
     home, drive = tmp_path / "home", tmp_path / "drive"
@@ -138,7 +154,9 @@ def build(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Machine:
     models = home / ".ollama" / "models"
     shared = blob(models, b"config shared by two models")
     manifest(models, "gemma", "31b", [shared, blob(models, b"g" * 300 * KB)])
-    manifest(models, "tiny", "latest", [shared, blob(models, b"t" * 20 * KB)])
+    tiny = [shared, blob(models, b"t" * 20 * KB)]
+    manifest(models, "tiny", "latest", tiny)
+    manifest_v2(models, "tiny", "latest", tiny)  # tiny was pulled by Ollama 0.40: both folders
     repo = home / ".cache" / "huggingface" / "hub" / "models--org--name"
     (repo / "blobs").mkdir(parents=True)
     (repo / "blobs" / "abc").write_bytes(b"w" * 200 * KB)

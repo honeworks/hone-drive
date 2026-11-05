@@ -256,3 +256,19 @@ proposed option (D-001, D-003, D-005, D-006, D-007, D-008).
   comes back exactly as it left. Tested with the real Ollama, both ways back, on the reference machine.
 - **Status:** follows change 0003; found by the "Real tools" workflow the owner asked for.
 
+## D-025: Ollama 0.40 keeps manifests in two folders  (2026-11-05)
+
+- **Question:** the "Real tools" runners have Ollama 0.40, which keeps a model's manifest as a blob (the
+  registry's own bytes) with a link to it in `manifests-v2/<host>/<namespace>/<model>/<tag>` (`ollama.com`
+  for its library), next to the older `manifests/` file it still writes on a pull; `ollama cp` and a pull
+  from another registry write only `manifests-v2`. The scan saw only `manifests/`.
+- **Choice:** the scan reads both folders and makes one model of every name whose manifest lists the same
+  config and layers (the item id is now a hash of those, not of the manifest's bytes); the blob a
+  manifests-v2 link points to is counted as used. On the shelf an Ollama model is its blobs, the
+  manifest blob, the `manifests/` files and the `manifests-v2` links (kept as links in the catalog, as
+  Hugging Face's are). A model counts as on the computer when Ollama has each of its names listing the
+  drive copy's config and layers, in either folder. The way back through Ollama's server serves the
+  registry's own bytes when the drive has them.
+- **Why:** Ollama is moving to the new layout; a model must move and come back whole in both.
+- **Status:** follows change 0003; found by the "Real tools" workflow.
+

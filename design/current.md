@@ -495,7 +495,9 @@ everything; they never leave the machine unless the user shares a report.
 Change [0003](changes/0003-model-shelf.md). Models are used from the computer; a drive's **shelf** keeps
 the ones not needed now. Nothing here happens unless the user starts it.
 
-**A model** is, per tool: Ollama, a manifest and the blobs it lists (a blob another model lists is shared);
+**A model** is, per tool: Ollama, its manifests (`manifests/` files and, since Ollama 0.40, `manifests-v2`
+links to a blob with the registry's bytes, D-025) and the blobs they list (a blob another model lists is
+shared);
 Hugging Face, one repo folder (`models--org--name`); ComfyUI, LM Studio, llama.cpp and the user's own
 folders, one model file. Its key is `<store id>:<name>` (`ollama:gemma4:31b`,
 `comfyui:diffusion_models/wan.safetensors`). Docker and package caches are not shelved: cleaning them is

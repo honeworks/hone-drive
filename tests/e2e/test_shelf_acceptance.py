@@ -110,7 +110,7 @@ def test_ac21_a_blob_another_model_lists_stays(machine: Machine) -> None:
     before = {p.name for p in (machine.models / "blobs").iterdir()}
     moved(machine, GEMMA)
     after = {p.name for p in (machine.models / "blobs").iterdir()}
-    assert len(before - after) == 1 and len(after) == 2  # gemma's own blob went, the shared one stayed
+    assert len(before - after) == 1 and len(after) == 3  # gemma's own blob went; tiny's three stayed
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permissions")
