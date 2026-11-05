@@ -164,3 +164,11 @@ def test_a_folder_on_a_skipped_filesystem_is_refused(tmp_path: Path, monkeypatch
     monkeypatch.setattr(bench_module, "_same_device", lambda folder, mount: False)
     with pytest.raises(UnsafeBenchmark, match="not on a volume"):
         bench(run, [str(tmp_path)], ["seq"], small())
+
+
+def test_every_reader_reads_at_least_once(tmp_path: Path) -> None:
+    """On a slow machine (Windows CI) the threads can start after the deadline: never measure zero reads."""
+    path = tmp_path / "f"
+    path.write_bytes(b"\0" * MIB)
+    counts = bench_module._parallel_reads(str(path), MIB // 4096, small(random_seconds=0.0))
+    assert len(counts) == 32 and all(c >= 1 for c in counts)

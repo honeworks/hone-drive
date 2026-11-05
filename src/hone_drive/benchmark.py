@@ -277,10 +277,12 @@ def _parallel_reads(path: str, blocks: int, options: Options) -> list[int]:
     def worker(seed: int) -> int:
         rng, data, count = random.Random(seed), buffer(ALIGN), 0  # noqa: S311 - offsets, not secrets
         with open_file(path, write=False).file as handle:
-            while time.monotonic() < deadline and not options.stop.is_set():
+            while not options.stop.is_set():  # at least one read: a thread may start after the deadline
                 handle.seek(rng.randrange(blocks) * ALIGN)
                 handle.readinto(data)
                 count += 1
+                if time.monotonic() >= deadline:
+                    break
         return count
 
     with ThreadPoolExecutor(max_workers=32) as pool:
