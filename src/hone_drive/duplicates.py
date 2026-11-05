@@ -11,6 +11,7 @@ from hone_drive.model import Duplicate, Store
 
 MIN_BYTES = 100 * 1000**2
 CHUNK = 16 * 1024 * 1024
+NOT_MODELS = ("caches", "docker")  # folders of packages, and Docker's own accounting
 
 
 def sha256_of(path: str) -> str | None:
@@ -48,7 +49,26 @@ def _files(store: Store) -> list[str]:
     if store.id == "ollama" and store.path and store.source == "files":
         blobs = os.path.join(store.path, "blobs")
         return [os.path.join(blobs, n) for n in os.listdir(blobs)] if os.path.isdir(blobs) else []
-    return [i.path for i in store.items if i.path and i.files == 1 and os.path.isfile(i.path)]
+    if store.id in NOT_MODELS:
+        return []
+    found: list[str] = []
+    for item in store.items:
+        if item.path and os.path.isfile(item.path):
+            found.append(item.path)
+        elif item.path and os.path.isdir(item.path) and not item.id.startswith("("):
+            # a Hugging Face repo: every file in it ("(other files)" only sums what is left over)
+            found += _inside(item.path)
+    return found
+
+
+def _inside(folder: str) -> list[str]:
+    """Regular files under `folder`, not symlinks (a Hugging Face snapshot links to its blobs)."""
+    return [
+        os.path.join(root, name)
+        for root, _, names in os.walk(folder)
+        for name in names
+        if not os.path.islink(os.path.join(root, name))
+    ]
 
 
 def _identity(path: str) -> tuple[int, int] | str:

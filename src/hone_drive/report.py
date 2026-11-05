@@ -15,9 +15,27 @@ UUID = re.compile(
 )
 
 
+# Folders the tools use by default outside the home folder (store_ollama.DEFAULTS, store_docker).
+KNOWN_PLACES = ("/usr/share/ollama", "/var/lib/ollama", "/var/lib/docker", "/var/lib/containerd")
+
+
+def _custom_roots(run: Run, home: str) -> list[str]:
+    """Store paths outside the home folder and the tools' default folders, longest first (design §13)."""
+    roots = {
+        s.path
+        for s in run.stores
+        if s.path and not _under(s.path, home) and not any(_under(s.path, k) for k in KNOWN_PLACES)
+    }
+    return sorted(roots, key=len, reverse=True)
+
+
+def _under(path: str, folder: str) -> bool:
+    return path == folder or path.startswith((folder.rstrip("/\\") + "/", folder.rstrip("/\\") + "\\"))
+
+
 def redacted(run: Run, home: str | None = None) -> Run:
     """A copy of `run` without serial numbers, UUIDs, the host name, the user name and home path, and with
-    paths outside the known places replaced by `<custom>`."""
+    store paths outside the known places replaced by `<custom>` wherever they appear."""
     home = home or str(Path.home())
     user = Path(home).name
     data: dict[str, Any] = run.model_dump()
@@ -32,6 +50,8 @@ def redacted(run: Run, home: str | None = None) -> Run:
                 item["path"] = "<custom>"
     data["machine"]["hostname"] = "<host>"
     raw = json.dumps(data)
+    for root in _custom_roots(run, home):
+        raw = raw.replace(json.dumps(root)[1:-1], "<custom>")
     raw = raw.replace(json.dumps(home)[1:-1], "~")
     if len(user) > 2:
         raw = re.sub(rf"\b{re.escape(user)}\b", "<user>", raw)

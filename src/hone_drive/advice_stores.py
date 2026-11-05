@@ -73,7 +73,8 @@ def a02_move_stores(run: Run, home: str) -> list[Advice]:
                 cites += now.cites + then.cites
         copying = copy_time(store, source.mount, target.mount, run)
         if copying:
-            why.append(f"Copying takes about {text.seconds(copying.seconds)}.")
+            guess = "" if copying.basis == "measured read and write" else " (estimated from the connections)"
+            why.append(f"Copying takes about {text.seconds(copying.seconds)}{guess}.")
         if models:
             why.append(
                 "Only loading gets slower: once a model is loaded it runs from GPU memory and RAM "

@@ -186,3 +186,11 @@ def test_windows_and_macos_commands() -> None:
         torch = next(a for a in advice if a.title == "Clean PyTorch hub")
         expected = "Remove-Item" if os_name == "windows" else "rm -rf"
         assert expected in torch.commands[os_name][0]
+
+
+def test_ac11_findings_show_the_command_that_checks_them() -> None:
+    """AC11: A01 and A04 come with the hone-drive command that measures them again."""
+    run = reference_run()
+    items = {a.rule: a for a in advise(run, HOME)}
+    assert items["A01"].commands["linux"] == ["hone-drive scan --account"]
+    assert items["A04"].commands["linux"] == ["hone-drive bench / --tests seq"]

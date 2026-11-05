@@ -99,12 +99,13 @@ MIN_BYTES = 10 * 1000**2  # caches under 10 MB are not worth a line
 def find_caches(ctx: Context) -> list[Store]:
     total = Tally()
     items: list[Item] = []
+    deadline = ctx.deadline()  # one time limit for the whole store (design §5.2)
     for cache in CACHES:
         templates = cache.paths.get("any", []) + cache.paths.get(ctx.os_name, [])
         for path in candidates_for(ctx, templates):
             if not os.path.isdir(path):
                 continue
-            tally = size_of(path, ctx.deadline(), total.seen)
+            tally = size_of(path, deadline, total.seen)
             total.bytes += tally.bytes
             total.unreadable += tally.unreadable
             total.partial |= tally.partial

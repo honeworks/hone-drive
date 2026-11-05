@@ -65,3 +65,21 @@ def test_markdown_sections() -> None:
     for heading in ("## Drives", "## Volumes", "## Measurements", "## Stores"):
         assert heading in text
     assert "(limited)" in text
+
+
+def test_report_hides_store_paths_outside_the_known_places() -> None:
+    """Design §13: a store path outside the home folder and the tools' default folders is `<custom>`."""
+    run = reference_run()
+    run.stores.append(
+        Store(
+            id="huggingface",
+            title="Hugging Face cache",
+            path="/mnt/projectx/hf/hub",
+            items=[Item(id="m", names=["m"], path="/mnt/projectx/hf/hub/models--m")],
+        )
+    )
+    run.stores.append(Store(id="ollama", title="Ollama models", path="/usr/share/ollama/.ollama/models"))
+    text = report(run, "json", home="/home/user")
+    assert "projectx" not in text and "<custom>" in text
+    assert "/usr/share/ollama/.ollama/models" in text
+    assert "projectx" in report(run, "json", keep_private=True, home="/home/user")

@@ -233,3 +233,34 @@ def test_candidates_and_blocked(ctx: Context, home: Path) -> None:
     assert blocked(str(home / "nothing" / "here")) is False
     assert set(all_finders()) >= {"ollama", "huggingface", "comfyui", "docker", "caches"}
     assert hashlib.sha256(b"").hexdigest()
+
+
+def test_docker_volumes_and_containers_get_no_clean_command(ctx: Context) -> None:
+    """A07 is for what tools download again (design §8.1); volumes and containers hold user data."""
+    rows = "\n".join(
+        json.dumps({"Type": kind, "Size": "9GB", "Reclaimable": "9GB"})
+        for kind in ("Images", "Containers", "Local Volumes", "Build Cache")
+    )
+    ctx.run = FakeRunner({"docker system df": Output(0, rows)})
+    clean = {i.names[0]: i.details["clean"] for i in find_docker(ctx)[0].items}
+    assert clean == {
+        "Images": "docker image prune -a",
+        "Containers": "",
+        "Local Volumes": "",
+        "Build Cache": "docker builder prune",
+    }
+
+
+def test_one_time_limit_per_store(ctx: Context, home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Design §5.2: the time limit is per store, not per repo or per cache."""
+    hub = home / ".cache" / "huggingface" / "hub"
+    for name in ("models--a--one", "models--b--two"):
+        write(hub / name / "blobs" / "x", MB)
+    write(home / ".cache" / "pip" / "x", MB)
+    write(home / ".npm" / "x", MB)
+    calls: list[int] = []
+    real = Context.deadline
+    monkeypatch.setattr(Context, "deadline", lambda self: calls.append(1) or real(self))
+    find_huggingface(ctx)
+    find_caches(ctx)
+    assert len(calls) == 2

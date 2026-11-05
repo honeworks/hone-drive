@@ -60,3 +60,16 @@ def test_ollama_blob_names_are_their_hash(tmp_path: Path) -> None:
     found = find_duplicates([ollama, store("huggingface", other)])
     assert found and found[0].sha256 == real
     assert sha256_of(str(tmp_path / "missing")) is None
+
+
+def test_files_inside_a_hugging_face_repo_are_candidates(tmp_path: Path) -> None:
+    """Design §5.3: any file over the minimum, also inside a repo of many files."""
+    repo = tmp_path / "hub" / "models--org--name"
+    blob = write(repo / "blobs" / "abc", 100)
+    write(repo / "blobs" / "small", 5)
+    comfy = write(tmp_path / "comfy" / "model.safetensors", 100)
+    hf = Store(
+        id="huggingface", title="hf", items=[Item(id=repo.name, names=["org/name"], path=str(repo), files=2)]
+    )
+    found = find_duplicates([hf, store("comfyui", comfy)])
+    assert len(found) == 1 and found[0].paths == sorted([str(blob), str(comfy)])
