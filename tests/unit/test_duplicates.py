@@ -73,3 +73,12 @@ def test_files_inside_a_hugging_face_repo_are_candidates(tmp_path: Path) -> None
     )
     found = find_duplicates([hf, store("comfyui", comfy)])
     assert len(found) == 1 and found[0].paths == sorted([str(blob), str(comfy)])
+
+
+def test_only_hugging_face_folders_are_walked(tmp_path: Path) -> None:
+    """Other stores list their large files one by one; a folder item there is not walked."""
+    folder = tmp_path / "lm"
+    write(folder / "a.gguf", 100)
+    other = write(tmp_path / "b" / "a.gguf", 100)
+    lm = Store(id="lmstudio", title="lm", items=[Item(id="x", names=["x"], path=str(folder), files=1)])
+    assert find_duplicates([lm, store("custom", other)]) == []

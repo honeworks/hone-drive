@@ -83,3 +83,13 @@ def test_report_hides_store_paths_outside_the_known_places() -> None:
     assert "projectx" not in text and "<custom>" in text
     assert "/usr/share/ollama/.ollama/models" in text
     assert "projectx" in report(run, "json", keep_private=True, home="/home/user")
+
+
+def test_report_replaces_a_custom_root_only_at_a_path_boundary() -> None:
+    run = reference_run()
+    run.stores.append(Store(id="huggingface", title="hf", path="/mnt/data"))
+    run.stores.append(Store(id="custom", title="other", path="/home/user/x", items=[]))
+    run.accounting = []
+    run.volumes[1].mount = "/mnt/data2"  # a sibling that shares the prefix, not inside the root
+    text = report(run, "json", home="/home/user")
+    assert "<custom>2" not in text and "/mnt/data2" in text

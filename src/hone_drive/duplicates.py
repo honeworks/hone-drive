@@ -55,8 +55,8 @@ def _files(store: Store) -> list[str]:
     for item in store.items:
         if item.path and os.path.isfile(item.path):
             found.append(item.path)
-        elif item.path and os.path.isdir(item.path) and not item.id.startswith("("):
-            # a Hugging Face repo: every file in it ("(other files)" only sums what is left over)
+        elif store.id == "huggingface" and item.path and os.path.isdir(item.path):
+            # a Hugging Face repo is one item of many files; other stores list their large files
             found += _inside(item.path)
     return found
 
