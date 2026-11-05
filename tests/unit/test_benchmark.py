@@ -141,6 +141,24 @@ def test_sustained_label() -> None:
     assert sustained_label([1.0] * 10) == "steady"
 
 
+def test_sustained_label_throttling() -> None:
+    """A drop after a steady stretch that isn't a cache running out (design §6.4)."""
+    assert sustained_label([1.0] * 6 + [0.6] * 4) == "throttling after 6 s"
+    assert sustained_label([1.0] * 6 + [0.9] * 4) == "steady"  # within the noise
+    assert sustained_label([1.0, 0.5, 1.2, 0.7, 1.0, 0.6, 0.6, 0.6, 0.6]) == "steady"  # never steady first
+
+
+def test_random_read_defaults_and_measured_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """20 s by default (design §6.1); throughput is divided by the time the reads took, not the plan."""
+    assert Options().random_seconds == 20.0
+    monkeypatch.setattr(bench_module, "_parallel_reads", lambda *_args: [1000] * 32)
+    run = local_run(tmp_path)
+    bench(run, [str(tmp_path)], ["random"], small())
+    random_read = run.measurements[0]
+    assert random_read.seconds < 0.1  # the stubbed reads took no time; the plan said 0.1 s
+    assert random_read.iops is not None and random_read.iops > 32000 / 0.1
+
+
 def test_a_folder_on_a_skipped_filesystem_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     run = local_run(tmp_path)
     monkeypatch.setattr(bench_module, "_same_device", lambda folder, mount: False)
